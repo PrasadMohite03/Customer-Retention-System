@@ -1,0 +1,257 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  OWNER
+  STAFF
+}
+
+enum RewardType {
+  NONE
+  PERCENT_DISCOUNT
+  FIXED_DISCOUNT
+  FREE_ITEM
+}
+
+enum LoyaltyCycleStatus {
+  ACTIVE
+  COMPLETED
+}
+
+enum VisitRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MilestoneRewardStatus {
+  UNLOCKED
+  REDEEMED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         UserRole
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  businesses Business[] @relation("BusinessOwner")
+  staffRoles Staff[]    @relation("UserStaff")
+}
+
+model Business {
+  id        String   @id @default(uuid())
+  name      String
+  type      String?
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner            User              @relation("BusinessOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  branches         Branch[]          @relation("BusinessBranches")
+  staff            Staff[]           @relation("BusinessStaff")
+  customerProfiles CustomerProfile[] @relation("BusinessCustomerProfiles")
+  loyaltyPrograms  LoyaltyProgram[]  @relation("BusinessLoyaltyPrograms")
+
+  @@index([ownerId])
+}
+
+model Branch {
+  id         String   @id @default(uuid())
+  businessId String
+  name       String
+  address    String?
+  qrToken    String   @unique
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business        Business         @relation("BusinessBranches", fields: [businessId], references: [id], onDelete: Restrict)
+  staff           Staff[]          @relation("BranchStaff")
+  loyaltyPrograms LoyaltyProgram[] @relation("BranchLoyaltyPrograms")
+  visitRequests   VisitRequest[]   @relation("BranchVisitRequests")
+  visits          Visit[]          @relation("BranchVisits")
+
+  @@index([businessId])
+}
+
+model Staff {
+  id         String   @id @default(uuid())
+  userId     String
+  businessId String
+  branchId   String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user             User              @relation("UserStaff", fields: [userId], references: [id], onDelete: Restrict)
+  business         Business          @relation("BusinessStaff", fields: [businessId], references: [id], onDelete: Restrict)
+  branch           Branch            @relation("BranchStaff", fields: [branchId], references: [id], onDelete: Restrict)
+  resolvedRequests VisitRequest[]    @relation("StaffResolvedRequests")
+  approvedVisits   Visit[]           @relation("StaffApprovedVisits")
+  redeemedRewards  MilestoneReward[] @relation("StaffRedeemedRewards")
+
+  @@index([businessId])
+  @@index([branchId])
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  phone     String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profiles CustomerProfile[] @relation("CustomerProfiles")
+}
+
+model CustomerProfile {
+  id         String   @id @default(uuid())
+  customerId String
+  businessId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  customer      Customer       @relation("CustomerProfiles", fields: [customerId], references: [id], onDelete: Restrict)
+  business      Business       @relation("BusinessCustomerProfiles", fields: [businessId], references: [id], onDelete: Restrict)
+  loyaltyCycles LoyaltyCycle[] @relation("CustomerProfileLoyaltyCycles")
+  visitRequests VisitRequest[] @relation("CustomerProfileVisitRequests")
+
+  @@unique([customerId, businessId])
+  @@index([customerId])
+  @@index([businessId])
+}
+
+model LoyaltyProgram {
+  id          String   @id @default(uuid())
+  businessId  String
+  branchId    String
+  name        String
+  description String?
+  cycleLength Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation("BusinessLoyaltyPrograms", fields: [businessId], references: [id], onDelete: Restrict)
+  branch   Branch   @relation("BranchLoyaltyPrograms", fields: [branchId], references: [id], onDelete: Restrict)
+
+  milestones    Milestone[]    @relation("ProgramMilestones")
+  loyaltyCycles LoyaltyCycle[] @relation("ProgramLoyaltyCycles")
+  // Note: Partial unique index for active program per branch is documented in database.md
+  // CREATE UNIQUE INDEX unique_active_program_per_branch ON "LoyaltyProgram" ("branchId") WHERE "isActive" = true;
+
+  @@index([businessId])
+  @@index([branchId])
+}
+
+model Milestone {
+  id                String     @id @default(uuid())
+  programId         String
+  visitNumber       Int
+  rewardType        RewardType
+  rewardName        String?
+  rewardDescription String?
+  rewardValue       Decimal?   @db.Decimal(10, 2)
+  isEnabled         Boolean    @default(true)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  program          LoyaltyProgram    @relation("ProgramMilestones", fields: [programId], references: [id], onDelete: Restrict)
+  milestoneRewards MilestoneReward[] @relation("MilestoneRewards")
+
+  @@unique([programId, visitNumber])
+  @@index([programId])
+}
+
+model LoyaltyCycle {
+  id                String             @id @default(uuid())
+  customerProfileId String
+  programId         String
+  cycleNumber       Int
+  visitCount        Int
+  status            LoyaltyCycleStatus
+  startedAt         DateTime
+  completedAt       DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  customerProfile  CustomerProfile   @relation("CustomerProfileLoyaltyCycles", fields: [customerProfileId], references: [id], onDelete: Restrict)
+  program          LoyaltyProgram    @relation("ProgramLoyaltyCycles", fields: [programId], references: [id], onDelete: Restrict)
+  visits           Visit[]           @relation("LoyaltyCycleVisits")
+  milestoneRewards MilestoneReward[] @relation("LoyaltyCycleMilestoneRewards")
+  // Note: Partial unique index for active cycle is documented in database.md
+  // CREATE UNIQUE INDEX unique_active_cycle_per_customer_program ON "LoyaltyCycle" ("customerProfileId", "programId") WHERE "status" = 'ACTIVE';
+
+  @@unique([customerProfileId, programId, cycleNumber])
+  @@index([customerProfileId])
+  @@index([programId])
+  @@index([customerProfileId, programId, status])
+}
+
+model VisitRequest {
+  id                String             @id @default(uuid())
+  customerProfileId String
+  branchId          String
+  status            VisitRequestStatus
+  requestedAt       DateTime           @default(now())
+  resolvedAt        DateTime?
+  resolvedByStaffId String?
+
+  customerProfile CustomerProfile @relation("CustomerProfileVisitRequests", fields: [customerProfileId], references: [id], onDelete: Restrict)
+  branch          Branch          @relation("BranchVisitRequests", fields: [branchId], references: [id], onDelete: Restrict)
+  resolvedByStaff Staff?          @relation("StaffResolvedRequests", fields: [resolvedByStaffId], references: [id], onDelete: Restrict)
+  visit           Visit?          @relation("VisitRequestVisit")
+
+  @@index([customerProfileId])
+  @@index([branchId])
+  @@index([branchId, status])
+}
+
+model Visit {
+  id                 String   @id @default(uuid())
+  loyaltyCycleId     String
+  visitRequestId     String   @unique
+  branchId           String
+  visitNumberInCycle Int
+  approvedByStaffId  String
+  createdAt          DateTime @default(now())
+
+  loyaltyCycle    LoyaltyCycle @relation("LoyaltyCycleVisits", fields: [loyaltyCycleId], references: [id], onDelete: Restrict)
+  visitRequest    VisitRequest @relation("VisitRequestVisit", fields: [visitRequestId], references: [id], onDelete: Restrict)
+  branch          Branch       @relation("BranchVisits", fields: [branchId], references: [id], onDelete: Restrict)
+  approvedByStaff Staff        @relation("StaffApprovedVisits", fields: [approvedByStaffId], references: [id], onDelete: Restrict)
+
+  @@index([loyaltyCycleId])
+  @@index([branchId])
+}
+
+model MilestoneReward {
+  id                        String                @id @default(uuid())
+  loyaltyCycleId            String
+  milestoneId               String
+  snapshotRewardType        RewardType
+  snapshotRewardValue       Decimal?              @db.Decimal(10, 2)
+  snapshotRewardName        String?
+  snapshotRewardDescription String?
+  status                    MilestoneRewardStatus
+  unlockedAt                DateTime              @default(now())
+  redeemedAt                DateTime?
+  redeemedByStaffId         String?
+
+  loyaltyCycle    LoyaltyCycle @relation("LoyaltyCycleMilestoneRewards", fields: [loyaltyCycleId], references: [id], onDelete: Restrict)
+  milestone       Milestone    @relation("MilestoneRewards", fields: [milestoneId], references: [id], onDelete: Restrict)
+  redeemedByStaff Staff?       @relation("StaffRedeemedRewards", fields: [redeemedByStaffId], references: [id], onDelete: Restrict)
+
+  @@unique([loyaltyCycleId, milestoneId])
+  @@index([loyaltyCycleId])
+  @@index([loyaltyCycleId, status])
+}
