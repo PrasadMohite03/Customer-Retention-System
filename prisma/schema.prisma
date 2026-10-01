@@ -43,8 +43,9 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  businesses Business[] @relation("BusinessOwner")
-  staffRoles Staff[]    @relation("UserStaff")
+  businesses      Business[]       @relation("BusinessOwner")
+  staffRoles      Staff[]          @relation("UserStaff")
+  refreshSessions RefreshSession[] @relation("UserRefreshSessions")
 }
 
 model Business {
@@ -110,7 +111,8 @@ model Customer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  profiles CustomerProfile[] @relation("CustomerProfiles")
+  profiles        CustomerProfile[] @relation("CustomerProfiles")
+  refreshSessions RefreshSession[]  @relation("CustomerRefreshSessions")
 }
 
 model CustomerProfile {
@@ -255,3 +257,35 @@ model MilestoneReward {
   @@index([loyaltyCycleId])
   @@index([loyaltyCycleId, status])
 }
+
+model RefreshSession {
+  id         String   @id @default(uuid())
+  userId     String?
+  customerId String?
+  tokenHash  String
+  expiresAt  DateTime
+  isRevoked  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user     User?     @relation("UserRefreshSessions", fields: [userId], references: [id], onDelete: Restrict)
+  customer Customer? @relation("CustomerRefreshSessions", fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([customerId])
+}
+
+model CustomerOtp {
+  id             String    @id @default(uuid())
+  phone          String
+  otpHash        String
+  expiresAt      DateTime
+  failedAttempts Int       @default(0)
+  usedAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([phone])
+  @@index([phone, usedAt, expiresAt])
+}
+

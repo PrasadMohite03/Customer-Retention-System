@@ -248,6 +248,62 @@ Staff                                                          │
 
 ---
 
+### `RefreshSession`
+
+**Purpose:** Tracks active refresh token sessions for both internal users (Owner/Staff) and customers. Used for stateful refresh token management, rotation, and revocation.
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | UUID | No | Primary key. Used as the session identifier. |
+| `userId` | UUID FK → `User.id` | Yes | Populated if session belongs to an Owner or Staff |
+| `customerId` | UUID FK → `Customer.id` | Yes | Populated if session belongs to a Customer |
+| `tokenHash` | String | No | Hash (e.g., SHA-256) of the current opaque token |
+| `expiresAt` | DateTime | No | When this session expires |
+| `isRevoked` | Boolean | No | Default: `false`. True if session is revoked due to logout or suspicious reuse. |
+| `createdAt` | DateTime | No | Set on insert |
+| `updatedAt` | DateTime | No | Updated on every rotation/write |
+
+**Rules:**
+
+- Exactly one of `userId` or `customerId` must be non-null. This must be enforced by a PostgreSQL `CHECK` constraint (e.g., `CHECK (("userId" IS NOT NULL AND "customerId" IS NULL) OR ("userId" IS NULL AND "customerId" IS NOT NULL))`) in a raw migration.
+- The raw refresh token is NEVER stored in the database. Only its hash is stored in `tokenHash`.
+- The cookie sent to the client should contain both the session `id` and the raw opaque token (e.g., `<sessionId>:<opaqueToken>`).
+- On successful refresh, the `tokenHash` is updated in place atomically, effectively rotating the token and invalidating the previous one. This atomic update prevents concurrent requests from reusing the same token.
+- If a client presents a valid `sessionId` but an invalid/old token (hash mismatch), the session must be flagged `isRevoked = true` (reuse detection).
+
+### Indexes Required
+- `userId`: Index for lookup during Owner/Staff cascading lookups or logout-all flows.
+- `customerId`: Index for lookup during Customer cascading lookups or logout-all flows.
+
+---
+
+### `CustomerOtp`
+
+**Purpose:** Persistence model for temporary Customer OTP verification.
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | UUID | No | Primary key |
+| `phone` | String | No | Target phone number (normalized) |
+| `otpHash` | String | No | Hash (e.g., SHA-256) of the 6-digit OTP |
+| `expiresAt` | DateTime | No | OTP expiration timestamp (5 minutes after creation) |
+| `failedAttempts` | Integer | No | Default: 0. Incremented on wrong OTP attempt. Invalidated after 3. |
+| `usedAt` | DateTime | Yes | Null until successfully verified. Prevents reuse. |
+| `createdAt` | DateTime | No | Set on insert |
+| `updatedAt` | DateTime | No | Updated on verification / failed attempts |
+
+**Rules:**
+- Plaintext OTP is NEVER stored in the database.
+- Maximum 3 failed verification attempts before invalidation.
+- Successful verification sets `usedAt`.
+- Generating a new OTP invalidates previous active OTPs for the same phone.
+
+### Indexes Required
+- `phone`: Index for lookup during OTP verification.
+- `(phone, usedAt, expiresAt)`: Composite index for active OTP query performance.
+
+---
+
 ## 5. Loyalty Models
 
 ---

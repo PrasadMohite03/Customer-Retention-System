@@ -1,11 +1,46 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import authRoutes from './routes/auth.routes';
+import { authenticateUser, authenticateCustomer, requireRole } from './middleware/auth.middleware';
 import { errorHandler } from './middleware/errorHandler';
+import { UserRole } from '@prisma/client';
 
 const app = express();
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
+
+// Auth routes
+app.use('/api/auth', authRoutes);
+
+// Protected route for Owner/Staff testing verification
+app.get(
+  '/api/test/protected',
+  authenticateUser,
+  requireRole([UserRole.OWNER, UserRole.STAFF]),
+  (req: Request, res: Response) => {
+    res.json({
+      status: 'success',
+      message: 'Access granted to protected route',
+      user: req.user,
+    });
+  }
+);
+
+// Protected route for Customer testing verification
+app.get(
+  '/api/test/customer-protected',
+  authenticateCustomer,
+  (req: Request, res: Response) => {
+    res.json({
+      status: 'success',
+      message: 'Access granted to customer protected route',
+      customer: req.customer,
+    });
+  }
+);
 
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'ok' });
