@@ -2,6 +2,8 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.routes';
+import businessRoutes from './routes/business.routes';
+import branchRoutes from './routes/branch.routes';
 import { authenticateUser, authenticateCustomer, requireRole } from './middleware/auth.middleware';
 import { errorHandler } from './middleware/errorHandler';
 import { UserRole } from '@prisma/client';
@@ -14,6 +16,10 @@ app.use(cookieParser());
 
 // Auth routes
 app.use('/api/auth', authRoutes);
+
+// Business & Branch routes (Authenticated OWNER-only)
+app.use('/api/business', businessRoutes);
+app.use('/api/branches', branchRoutes);
 
 // Protected route for Owner/Staff testing verification
 app.get(

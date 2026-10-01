@@ -1,13 +1,23 @@
 import { Request, Response, NextFunction } from 'express';
+import { ZodError } from 'zod';
 import { AppError } from '../utils/errors';
 
 export const errorHandler = (
-  err: Error | AppError,
+  err: Error | AppError | ZodError,
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   console.error(err);
+
+  if (err instanceof ZodError) {
+    const issues = err.issues || (err as any).errors || [];
+    return res.status(400).json({
+      status: 'error',
+      message: issues[0]?.message || 'Validation error',
+      errors: issues,
+    });
+  }
 
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({
@@ -22,3 +32,4 @@ export const errorHandler = (
     message: 'Internal server error',
   });
 };
+
