@@ -106,26 +106,27 @@ export const OwnerDashboard: React.FC = () => {
           </div>
         </Link>
 
-        {/* Upcoming Loyalty Module */}
-        <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-xs flex flex-col justify-between opacity-80">
+        {/* Loyalty Engine Card */}
+        <Link
+          to="/owner/branches"
+          className="bg-white border border-slate-200 p-6 rounded-2xl shadow-xs hover:border-indigo-300 hover:shadow-sm transition-all flex flex-col justify-between group"
+        >
           <div>
-            <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 flex items-center justify-center mb-4">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
               <Layers className="w-5 h-5" />
             </div>
             <div className="flex items-center gap-2 mb-1">
               <h3 className="font-semibold text-slate-900 text-base">Loyalty Engine</h3>
-              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                Next Module
-              </span>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
               Configurable visit milestones, cycle lengths, and milestone rewards linked to branches.
             </p>
           </div>
-          <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 font-medium">
-            <span>Coming in next module</span>
+          <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs text-indigo-600 font-medium">
+            <span>Manage Loyalty</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
           </div>
-        </div>
+        </Link>
       </div>
     </div>
   );

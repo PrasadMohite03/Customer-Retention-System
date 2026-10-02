@@ -9,6 +9,7 @@ import { OwnerDashboard } from '../pages/owner/OwnerDashboard';
 import { BusinessProfile } from '../pages/owner/BusinessProfile';
 import { BranchList } from '../pages/owner/BranchList';
 import { BranchDetail } from '../pages/owner/BranchDetail';
+import { LoyaltyProgram } from '../pages/owner/LoyaltyProgram';
 import { StaffDashboard } from '../pages/staff/StaffDashboard';
 import { CustomerDashboard } from '../pages/customer/CustomerDashboard';
 import { ProtectedRoute, PublicOnlyRoute } from './guards';
@@ -71,6 +72,10 @@ export const router = createBrowserRouter([
       {
         path: 'branches/:id',
         element: <BranchDetail />,
+      },
+      {
+        path: 'branches/:id/loyalty-program',
+        element: <LoyaltyProgram />,
       },
     ],
   },

@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.routes';
 import businessRoutes from './routes/business.routes';
 import branchRoutes from './routes/branch.routes';
+import { loyaltyProgramRouter, milestoneRouter } from './routes/loyalty.routes';
 import { authenticateUser, authenticateCustomer, requireRole } from './middleware/auth.middleware';
 import { errorHandler } from './middleware/errorHandler';
 import { UserRole } from '@prisma/client';
@@ -20,6 +21,10 @@ app.use('/api/auth', authRoutes);
 // Business & Branch routes (Authenticated OWNER-only)
 app.use('/api/business', businessRoutes);
 app.use('/api/branches', branchRoutes);
+
+// Loyalty Program & Milestone routes (Authenticated OWNER-only)
+app.use('/api/loyalty-programs', loyaltyProgramRouter);
+app.use('/api/milestones', milestoneRouter);
 
 // Protected route for Owner/Staff testing verification
 app.get(

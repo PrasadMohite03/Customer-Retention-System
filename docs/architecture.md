@@ -1,7 +1,7 @@
 # Technical Architecture
 
 > **Status:** Draft — MVP Phase  
-> **Last Updated:** 2026-09-22 (Architectural decisions: cycleLength, NONE rewards, QR→program, customer identity)  
+> **Last Updated:** 2026-10-02 (Loyalty Program module complete: branch-scoped programs, ACTIVE/INACTIVE lifecycle, programId-based status endpoint, owner management list)  
 > **Audience:** Developers and AI coding agents implementing this product.  
 > **Source of truth for product requirements:** [`docs/product.md`](./product.md)
 
@@ -255,7 +255,9 @@ Staff
 
 LoyaltyProgram
   ├── belongs to Business
+  ├── belongs to Branch (branchId — required, non-nullable)
   ├── has a cycleLength (Int) — the visit count at which the cycle completes
+  ├── has a isActive (Boolean) — ACTIVE or INACTIVE. At most one isActive=true per branch at any time.
   ├── has many Milestone (reward checkpoints within the cycle, ordered by visitNumber)
   └── has many LoyaltyCycle
 
@@ -304,7 +306,9 @@ MilestoneReward
 
 ### Key Distinctions
 
-- **`LoyaltyProgram`** defines the rules, including `cycleLength`. It is owned by the business.
+- **`LoyaltyProgram`** defines the rules, including `cycleLength`. It is owned by the business and **scoped to a specific branch** (`branchId` is required and non-nullable).
+- A program is either **ACTIVE** (`isActive = true`) or **INACTIVE** (`isActive = false`). Each branch may have at most **one ACTIVE program** at any time.
+- Programs can be deactivated and later **reactivated**. Reactivation preserves the same program ID, all existing milestones, and all historical `LoyaltyCycle` relationships — no new record is created.
 - **`LoyaltyCycle`** is the customer's active run through a program. When `visitCount === program.cycleLength`, the cycle is marked `COMPLETED` and a new one begins.
 - **`Milestone`** is a reward checkpoint within the cycle. Milestones with `rewardType: NONE` are tracked for progress but do **not** create a `MilestoneReward` record.
 - **`Visit`** is a confirmed, approved interaction. A `VisitRequest` is the pending state before staff approval.
@@ -634,22 +638,24 @@ Per-business relationship between a customer and a business.
 ---
 
 #### `LoyaltyProgram`
-Defines the rules for a loyalty cycle, including the explicit cycle length.
+Defines the rules for a loyalty cycle, including the explicit cycle length. Each program is scoped to a specific branch.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | Primary key |
 | `businessId` | UUID FK → `Business.id` | Tenant scope |
-| `branchId` | UUID FK → `Branch.id` | The branch this program belongs to |
+| `branchId` | UUID FK → `Branch.id` | **Required and non-nullable.** Each program belongs to exactly one branch. |
 | `name` | String | e.g., "Café Rewards" |
 | `description` | String | Optional |
 | `cycleLength` | Integer | The visit count at which the loyalty cycle completes and resets (e.g., 7). Must be ≥ 1. |
-| `isActive` | Boolean | Whether the program is currently accepting visits. Only one active program per branch in MVP. |
+| `isActive` | Boolean | `true` = ACTIVE. `false` = INACTIVE. At most one `isActive = true` per branch at any time. |
 | `createdAt` | DateTime | Audit |
 | `updatedAt` | DateTime | Audit |
 
 **Index:** `businessId`, `branchId`.  
-**MVP constraint:** Each branch has at most one `isActive = true` loyalty program at any time. Enforced at the service level.
+**Partial unique index:** `UNIQUE(branchId) WHERE isActive = true` — database-level enforcement that prevents two concurrent ACTIVE programs on the same branch.  
+**ACTIVE/INACTIVE lifecycle:** Programs can be deactivated (`isActive = false`) and later reactivated (`isActive = true`). Reactivation restores the same program ID, milestones, and historical cycles — no new program record is created. Activating a program while another is already ACTIVE on the same branch returns `409 Conflict`.  
+**Owner management:** `GET /api/branches/:id/loyalty-programs` returns all programs (ACTIVE + INACTIVE) for the owner dashboard. `GET /api/branches/:id/loyalty-program` returns only the single active program and is intended for the future QR/customer flow.
 
 > **Important:** `cycleLength` is the single source of truth for when the cycle ends. Milestone `visitNumber` values must be ≤ `cycleLength`, but milestones do not control cycle completion.
 
@@ -821,31 +827,35 @@ The public QR endpoint resolves the `qrToken` → `Branch` → active `LoyaltyPr
 
 ---
 
-### Loyalty Programs (`/api/programs`)
+### Loyalty Programs & Milestones
 
-| Responsibility | Auth Required | Role |
+Loyalty programs are branch-scoped. All management endpoints require OWNER authentication.
+
+#### Branch-nested loyalty program routes (`/api/branches/:id/...`)
+
+| Method | Path | Responsibility |
 |---|---|---|
-| Create a loyalty program | Yes | OWNER |
-| List programs for own business | Yes | OWNER |
-| Get a program | Yes | OWNER |
-| Update a program | Yes | OWNER |
-| Enable/disable a program | Yes | OWNER |
+| `POST` | `/api/branches/:id/loyalty-program` | Create a new loyalty program for a branch (program is ACTIVE on creation; 409 if branch already has an ACTIVE program) |
+| `GET` | `/api/branches/:id/loyalty-program` | Get the single **ACTIVE** program for a branch (404 if none active — intended for future QR/customer flow) |
+| `GET` | `/api/branches/:id/loyalty-programs` | List **all** programs for a branch (ACTIVE + INACTIVE) — owner management view |
+| `PATCH` | `/api/branches/:id/loyalty-program` | Update the active program's name, description, or cycleLength |
 
-> **Note:** In the MVP, program details are returned as part of the public branch QR endpoint (see Branch above). A separate program-by-QR endpoint is not required.
+#### Program-level routes (`/api/loyalty-programs/:programId/...`)
 
----
-
-### Milestones (`/api/programs/:programId/milestones`)
-
-| Responsibility | Auth Required | Role |
+| Method | Path | Responsibility |
 |---|---|---|
-| Add a milestone to a program | Yes | OWNER |
-| List milestones for a program | Yes | OWNER |
-| Update a milestone | Yes | OWNER |
-| Enable/disable a milestone | Yes | OWNER |
-| Delete a milestone | Yes | OWNER |
+| `PATCH` | `/api/loyalty-programs/:programId/status` | Activate or deactivate a program by ID. 409 if activating while another program on the same branch is already ACTIVE. |
+| `POST` | `/api/loyalty-programs/:programId/milestones` | Add a milestone to a program |
 
-The backend verifies that `programId` belongs to the owner's business before any operation.
+#### Milestone routes (`/api/milestones/:milestoneId`)
+
+| Method | Path | Responsibility |
+|---|---|---|
+| `PATCH` | `/api/milestones/:milestoneId` | Update a milestone's visitNumber, rewardType, or reward details |
+| `PATCH` | `/api/milestones/:milestoneId/status` | Enable or disable a milestone |
+| `DELETE` | `/api/milestones/:milestoneId` | Delete a milestone (hard delete — allowed since milestones have no independent history) |
+
+For all program and milestone operations, the backend verifies that the resource belongs to `req.user.businessId` before proceeding. `businessId` is never accepted from the client.
 
 ---
 
@@ -1159,7 +1169,7 @@ The MVP architecture is intentionally simple. The following describes how the ar
 
 ### Multiple Branches
 
-Already modeled: `Branch` is a first-class entity. `LoyaltyProgram` optionally scopes to a branch. Staff are assigned to a specific branch. Adding full multi-branch management requires UI work and expanded authorization checks — the data model already supports it.
+Already modeled: `Branch` is a first-class entity. `LoyaltyProgram` is branch-scoped (`branchId` is required and non-nullable — not optional). Staff are assigned to a specific branch. The multi-branch management UI and expanded authorization checks require additional work, but the data model already supports it.
 
 ### WhatsApp / SMS / Email Campaigns
 

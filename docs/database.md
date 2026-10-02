@@ -1,7 +1,7 @@
 # Database Design
 
 > **Status:** Draft — MVP Phase  
-> **Last Updated:** 2026-09-22  
+> **Last Updated:** 2026-10-02 (Loyalty Program module complete; reward-type validation constraints documented)  
 > **Audience:** Developers and AI coding agents implementing the data layer.  
 > **Source of truth for product requirements:** [`docs/product.md`](./product.md)  
 > **Source of truth for application architecture:** [`docs/architecture.md`](./architecture.md)
@@ -331,7 +331,10 @@ Staff                                                          │
 - `cycleLength` is the **single source of truth for when a loyalty cycle ends**. A cycle completes when `LoyaltyCycle.visitCount === LoyaltyProgram.cycleLength`. This is not derived from milestones.
 - `cycleLength` must be a positive integer (≥ 1). A value of 0 or negative is invalid.
 - Disabling or removing a `Milestone` does **not** change `cycleLength`.
-- In the MVP, each branch has **at most one `isActive = true` loyalty program** at any time. This constraint is enforced at the application/service layer. See §10 for the partial index discussion.
+- Reducing `cycleLength` to a value below any existing milestone's `visitNumber` is **rejected (409 Conflict)** by the application before writing to the database. The owner must remove or update conflicting milestones first.
+- In the MVP, each branch has **at most one `isActive = true` loyalty program** at any time. This constraint is enforced at both the application/service layer and at the database level via the partial unique index (see §10).
+- A program can be **deactivated** (`isActive = false`) without deleting it. Deactivation does not create a new program and does not delete historical `LoyaltyCycle`, `Visit`, or `MilestoneReward` records.
+- A deactivated program can be **reactivated** (`isActive = true`). Reactivation restores the same program ID, all existing milestones, and all historical loyalty cycles. No new program record is created. Attempting to activate a program while another program on the same branch is already active returns `409 Conflict`.
 - Program-specific QR codes are not part of the MVP. The branch QR resolves to the branch's active program.
 
 > **Important:** `cycleLength` must not be null. Making it optional or defaulting it to something arbitrary would break the loyalty engine. It must be explicitly provided when creating a program.
@@ -367,10 +370,19 @@ Staff                                                          │
 **Rules:**
 
 - `(programId, visitNumber)` must be unique — only one milestone per visit number per program.
-- `visitNumber` should not exceed the program's `cycleLength`. This is a business rule enforced by the application; PostgreSQL cannot cross-check this without a trigger.
+- `visitNumber` must be ≥ 1 and ≤ the program's `cycleLength`. This is enforced by the application on creation and update. Reducing `cycleLength` below an existing `visitNumber` is also blocked by the application.
 - Milestones with `rewardType = NONE` are valid and may be used to track visit checkpoints without granting a reward.
 - When `rewardType = NONE`, **no `MilestoneReward` record is created** when the visit count reaches that `visitNumber`. The visit itself is still recorded normally.
 - Disabling a milestone (`isEnabled = false`) means the loyalty engine skips it. Disabling does not affect `cycleLength`.
+
+**Reward type validation constraints (enforced by application before writing):**
+
+| `rewardType` | `rewardValue` | `rewardName` |
+|---|---|---|
+| `NONE` | Must be null | Must be null |
+| `PERCENT_DISCOUNT` | Required, `> 0` and `≤ 100` | Optional |
+| `FIXED_DISCOUNT` | Required, `> 0` | Optional |
+| `FREE_ITEM` | Must be null | **Required and non-empty** |
 
 ---
 
@@ -626,7 +638,7 @@ ON "LoyaltyProgram" ("branchId")
 WHERE "isActive" = true;
 ```
 
-This allows multiple inactive programs per branch but enforces that only one active program exists.
+This allows multiple inactive programs per branch but enforces that **at most one active program per branch** exists at any time, even under concurrent request conditions. The application layer checks for an existing active program and returns `409 Conflict` before attempting to activate a second one. The partial index is the final safety net if the application check is bypassed by a race condition.
 
 ### One Active Cycle Per Customer Program
 

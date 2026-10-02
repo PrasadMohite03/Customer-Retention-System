@@ -18,6 +18,8 @@ import {
   Power,
   RefreshCw,
   Info,
+  Sparkles,
+  ChevronRight,
 } from 'lucide-react';
 
 export const BranchDetail: React.FC = () => {
@@ -459,10 +461,15 @@ export const BranchDetail: React.FC = () => {
                   <span className="text-slate-400">→</span>
                   <span className="truncate">{branch.name}</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-slate-500 font-normal">
+                <div className="flex items-center gap-1.5 text-indigo-600 font-medium">
                   <span>3. Program</span>
                   <span className="text-slate-400">→</span>
-                  <span className="italic">Upcoming Module</span>
+                  <Link
+                    to={`/owner/branches/${id}/loyalty-program`}
+                    className="text-indigo-600 hover:underline truncate"
+                  >
+                    Manage Loyalty Program
+                  </Link>
                 </div>
               </div>
               <p className="text-[11px] text-slate-500 leading-relaxed">
@@ -472,6 +479,25 @@ export const BranchDetail: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Loyalty Program Navigation Card */}
+      <Link
+        to={`/owner/branches/${id}/loyalty-program`}
+        className="group flex items-center justify-between gap-4 bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-200 rounded-2xl p-5 hover:shadow-md hover:border-indigo-300 transition-all"
+      >
+        <div className="flex items-center gap-4">
+          <div className="w-11 h-11 bg-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
+            <Sparkles className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Loyalty Program</h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Configure milestones, rewards, and cycle length for this branch
+            </p>
+          </div>
+        </div>
+        <ChevronRight className="w-5 h-5 text-indigo-400 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
+      </Link>
     </div>
   );
 };
