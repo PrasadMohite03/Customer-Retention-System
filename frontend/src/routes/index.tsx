@@ -4,12 +4,15 @@ import NotFound from '../pages/NotFound';
 import { Login } from '../pages/Login';
 import { RegisterOwner } from '../pages/RegisterOwner';
 import { CustomerLogin } from '../pages/CustomerLogin';
+import { LoyaltyPass } from '../pages/customer/LoyaltyPass';
 import { OwnerLayout } from '../layouts/OwnerLayout';
 import { OwnerDashboard } from '../pages/owner/OwnerDashboard';
 import { BusinessProfile } from '../pages/owner/BusinessProfile';
 import { BranchList } from '../pages/owner/BranchList';
 import { BranchDetail } from '../pages/owner/BranchDetail';
 import { LoyaltyProgram } from '../pages/owner/LoyaltyProgram';
+import { StaffManagement } from '../pages/owner/StaffManagement';
+import { OwnerVisitRequests } from '../pages/owner/OwnerVisitRequests';
 import { StaffDashboard } from '../pages/staff/StaffDashboard';
 import { CustomerDashboard } from '../pages/customer/CustomerDashboard';
 import { ProtectedRoute, PublicOnlyRoute } from './guards';
@@ -42,6 +45,10 @@ export const router = createBrowserRouter([
         <CustomerLogin />
       </PublicOnlyRoute>
     ),
+  },
+  {
+    path: '/loyalty/:qrToken',
+    element: <LoyaltyPass />,
   },
 
   // Role Protected Owner Routes
@@ -76,6 +83,14 @@ export const router = createBrowserRouter([
       {
         path: 'branches/:id/loyalty-program',
         element: <LoyaltyProgram />,
+      },
+      {
+        path: 'staff',
+        element: <StaffManagement />,
+      },
+      {
+        path: 'visit-requests',
+        element: <OwnerVisitRequests />,
       },
     ],
   },

@@ -358,14 +358,16 @@ Each milestone reward exists in one of the following states:
 | State | Description |
 |---|---|
 | **Upcoming** | Customer has not yet reached this milestone's visit number in the current cycle. |
-| **Unlocked** | Customer's visit count has reached this milestone. The reward is available to claim. Reaching an intermediate milestone does **not** reset cycle progress. |
-| **Redeemed** | Staff has marked this reward instance as redeemed when the customer claimed it. |
+| **Unlocked** | Customer's visit count has reached this milestone. The reward is available to claim. The customer can open their Reward QR or human-readable code (`RP-XXXX-XXXX-XXXX`) on their mobile loyalty pass to present to staff. Reaching an intermediate milestone does **not** reset cycle progress. |
+| **Redeemed** | Staff or Owner has scanned the customer's reward QR / entered the redemption code and confirmed redemption at checkout. Status transitions to `REDEEMED`, recording timestamp and operational staff actor. |
 
 Important: the cycle resets **only** when the customer reaches the final configured milestone. Intermediate milestone rewards are unlocked and redeemed independently without resetting the cycle.
 
-### 9.6 Loyalty History
-- Customer can view their past visits at the business
-- Customer can view past rewards (unlocked and redeemed)
+### 9.6 Loyalty History & Reward Presentation
+- Customer can view their past visits at the business.
+- Customer can view past rewards (unlocked and redeemed).
+- For `UNLOCKED` rewards, customer can tap **[ Show Reward ]** to display an opaque Reward QR code and formatted code (`RP-XXXX-XXXX-XXXX`) along with expiration and usage instructions. Customers cannot self-redeem.
+- For `REDEEMED` rewards, the pass displays `✓ Reward Name / REDEEMED / Used on <date>` and the QR code is no longer returned or accessible.
 
 ### 9.7 Multi-Business Support (Conceptual)
 - A customer is not permanently tied to a single business.
@@ -385,10 +387,11 @@ The V1 loyalty system uses a **cycle-based milestone model**. A business defines
 - Each approved staff visit adds 1 to the customer's visit count within the current loyalty cycle.
 - The system checks after every approved visit whether the visit count matches any enabled milestone.
 - If a match is found and the milestone has a reward, that reward is **automatically unlocked**.
+- When unlocked, a secure redemption token is generated and its deterministic SHA-256 hash is stored in the database.
 - Unlocking an **intermediate milestone** reward does **not** reset cycle progress — the customer continues toward the next milestone.
 - The cycle resets **only** when the customer reaches the **final configured milestone** (the highest visit number in the program). A new cycle then begins from Visit 1.
 - Each milestone is unlocked once per cycle. After a cycle reset, milestones become available again in the new cycle.
-- Staff can mark an unlocked reward as **redeemed** when the customer claims it in person.
+- Staff or Owner marks an unlocked reward as **redeemed** by scanning the customer's reward QR or entering their redemption code at checkout. Customers have no self-redeem action.
 
 #### Milestone Configuration
 

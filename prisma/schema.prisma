@@ -248,6 +248,8 @@ model MilestoneReward {
   unlockedAt                DateTime              @default(now())
   redeemedAt                DateTime?
   redeemedByStaffId         String?
+  redemptionTokenHash       String?               @unique
+  redemptionTokenCreatedAt  DateTime?
 
   loyaltyCycle    LoyaltyCycle @relation("LoyaltyCycleMilestoneRewards", fields: [loyaltyCycleId], references: [id], onDelete: Restrict)
   milestone       Milestone    @relation("MilestoneRewards", fields: [milestoneId], references: [id], onDelete: Restrict)

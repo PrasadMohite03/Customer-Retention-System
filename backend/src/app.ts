@@ -4,6 +4,9 @@ import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.routes';
 import businessRoutes from './routes/business.routes';
 import branchRoutes from './routes/branch.routes';
+import publicRoutes from './routes/public.routes';
+import customerRoutes from './routes/customer.routes';
+import staffRoutes from './routes/staff.routes';
 import { loyaltyProgramRouter, milestoneRouter } from './routes/loyalty.routes';
 import { authenticateUser, authenticateCustomer, requireRole } from './middleware/auth.middleware';
 import { errorHandler } from './middleware/errorHandler';
@@ -14,6 +17,15 @@ const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
+
+// Public routes (QR resolution)
+app.use('/api/public', publicRoutes);
+
+// Customer routes (Protected by authenticateCustomer)
+app.use('/api/customer', customerRoutes);
+
+// Staff routes (Protected by authenticateUser with STAFF/OWNER role)
+app.use('/api/staff', staffRoutes);
 
 // Auth routes
 app.use('/api/auth', authRoutes);

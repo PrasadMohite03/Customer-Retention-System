@@ -8,6 +8,8 @@ import {
   LayoutDashboard,
   Building2,
   GitBranch,
+  Users,
+  ClipboardCheck,
 } from 'lucide-react';
 
 export const OwnerLayout: React.FC = () => {
@@ -30,6 +32,18 @@ export const OwnerLayout: React.FC = () => {
       to: '/owner/branches',
       label: 'Branches',
       icon: GitBranch,
+      end: false,
+    },
+    {
+      to: '/owner/staff',
+      label: 'Staff',
+      icon: Users,
+      end: false,
+    },
+    {
+      to: '/owner/visit-requests',
+      label: 'Visit Requests',
+      icon: ClipboardCheck,
       end: false,
     },
   ];

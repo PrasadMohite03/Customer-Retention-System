@@ -488,15 +488,23 @@ Staff                                                          │
 | `unlockedAt` | DateTime | No | When the milestone's visit number was reached |
 | `redeemedAt` | DateTime | Yes | Null until redeemed |
 | `redeemedByStaffId` | UUID FK → `Staff.id` | Yes | Staff who marked redemption. Null until redeemed. |
+| `redemptionTokenHash` | String | Yes | Unique SHA-256 hash of raw token (`RP-XXXX-XXXX-XXXX`) |
+| `redemptionTokenCreatedAt` | DateTime | Yes | Timestamp when redemption token was generated |
 
 **Rules:**
 
 - A `MilestoneReward` is **never created for a milestone with `rewardType = NONE`**. Only milestones with `PERCENT_DISCOUNT`, `FIXED_DISCOUNT`, or `FREE_ITEM` produce a `MilestoneReward`.
 - `(loyaltyCycleId, milestoneId)` must be unique — a milestone can only be unlocked once per cycle.
+- **Redemption Token Security:**
+  - Raw token format: `RP-XXXX-XXXX-XXXX` (96-bit cryptographic entropy).
+  - Raw token is **never** stored in PostgreSQL; only deterministic SHA-256 hash is stored in `redemptionTokenHash` with a `@unique` index for $O(1)$ lookup.
+  - Raw token is returned only to authenticated customer for `UNLOCKED` rewards via `GET /api/customer/loyalty/:qrToken`. For `REDEEMED` rewards, the raw token is omitted.
+  - Opaque token in QR payload — no URLs, database UUIDs, customer IDs, or branch IDs are embedded.
 - **Snapshotting:** `snapshotRewardType`, `snapshotRewardValue`, `snapshotRewardName`, and `snapshotRewardDescription` are copied from the `Milestone` at the exact moment the reward is unlocked. After unlock, changes to the original `Milestone` do NOT modify the customer's existing reward. Redemption must use these snapshot values.
 - `status` starts as `UNLOCKED`. The only valid transition is `UNLOCKED → REDEEMED`.
 - A `REDEEMED` reward cannot be redeemed again. Duplicate redemption must be rejected (application returns `409 Conflict`).
 - Redemption must be performed by an authenticated `OWNER` or `STAFF` member belonging to the same business. Customers cannot self-redeem.
+- **Operational Actor Attribution:** When an `OWNER` performs redemption, the system automatically resolves or creates an operational `Staff` record linked to the owner's `User` via `resolveStaffRecord()`. This guarantees `redeemedByStaffId` foreign key integrity without relaxing database constraints.
 - `redeemedByStaffId` must belong to the same business as the `LoyaltyCycle`'s program. Enforced by application.
 - `MilestoneReward` records are **never deleted**. Historical reward records must remain preserved exactly as they were when earned.
 - Redeeming an intermediate milestone reward does **not** complete the loyalty cycle. Cycle completion is determined solely by `visitCount === cycleLength`.
@@ -792,22 +800,20 @@ Approving a visit request is the most critical write operation in the system. It
 ```
 BEGIN TRANSACTION
 
-  1. Fetch VisitRequest by ID.
-     Verify status = PENDING.
-     If not PENDING → abort with BUSINESS_RULE_VIOLATION.
-     (Use SELECT FOR UPDATE or equivalent locking to prevent concurrent approvals.)
+  1. Fetch and atomically claim VisitRequest by ID:
+     Conditional update: WHERE id = :id AND status = 'PENDING' AND branchId = :staffBranchId
+     If count === 0 → abort with 409 CONFLICT (already resolved or concurrent race).
 
-  2. Verify the VisitRequest.branchId belongs to the authenticated staff's business.
-     If not → abort with FORBIDDEN.
+  2. Verify staff is active and authorized for the branch's business.
 
   3. Resolve the active LoyaltyProgram for the branch.
-     Fetch its cycleLength.
-     If no active program → abort with BUSINESS_RULE_VIOLATION.
+     If no active program → abort with 422 UNPROCESSABLE_ENTITY.
 
   4. Find the customer's ACTIVE LoyaltyCycle for this program.
-     If none exists → create a new LoyaltyCycle (cycleNumber = 1, visitCount = 0).
+     If none exists → lazily create LoyaltyCycle (cycleNumber = nextCycleNumber, visitCount = 0, status = ACTIVE).
+     Gracefully catch concurrent creation race (re-query active cycle if P2002 partial index collision occurs).
 
-  5. Increment LoyaltyCycle.visitCount by 1.
+  5. Increment LoyaltyCycle.visitCount by 1:
      newVisitCount = visitCount + 1
 
   6. Create a Visit record:
@@ -832,16 +838,10 @@ BEGIN TRANSACTION
 
   8. Check cycle completion:
      If newVisitCount === loyaltyProgram.cycleLength:
-       Update LoyaltyCycle: status = COMPLETED, completedAt = now
-       Create new LoyaltyCycle:
-         customerProfileId = same
-         programId = same
-         cycleNumber = current cycleNumber + 1
-         visitCount = 0
-         status = ACTIVE
-         startedAt = now
-
-  9. Update VisitRequest: status = APPROVED, resolvedAt = now, resolvedByStaffId = staff ID
+       Update LoyaltyCycle: status = COMPLETED, completedAt = now, visitCount = newVisitCount
+       (Lazy Rollover: DO NOT create empty Cycle N+1 yet. Cycle N+1 will be created when next visit is approved.)
+     Else:
+       Update LoyaltyCycle: visitCount = newVisitCount
 
 COMMIT
 ```

@@ -437,56 +437,47 @@ Customer's LoyaltyCycle for that program
 ```
 1. SCAN
    Customer scans QR code → browser opens /loyalty/<qrToken>
-   Frontend calls the public branch endpoint using the QR token.
+   Frontend calls public endpoint GET /api/public/qr/:qrToken.
    Backend resolves: Branch → active LoyaltyProgram.
-   Frontend receives business name, program name, and program details.
-   The programId is never supplied by the client — it is resolved server-side from the QR token.
+   Frontend receives public metadata (business name, branch name, address, program name, cycle length, milestones).
+   No internal database UUIDs (businessId, branchId, programId) are exposed.
 
-2. PHONE ENTRY
+2. PHONE ENTRY & OTP
    Customer enters their phone number.
-   Frontend POSTs to /auth/customer/otp/send with { phone }.
-   Backend generates OTP, stores it server-side (hashed, with expiry), sends via SMS.
-
-3. OTP VERIFICATION
+   Frontend POSTs to /api/auth/customer/otp/send with { phone }.
    Customer enters OTP.
-   Frontend POSTs to /auth/customer/otp/verify with { phone, otp }.
-   Backend validates OTP → resolves or creates Customer record →
-   issues customer JWT { customerId, role: "CUSTOMER" } → returns access token.
-   OTP is invalidated after use or expiry.
+   Frontend POSTs to /api/auth/customer/otp/verify with { phone, otp }.
+   Backend verifies OTP → resolves/creates Customer → issues customer JWT { customerId, role: "CUSTOMER" }.
 
-4. PROFILE CHECK
-   If the Customer record is new: customer is prompted to enter their name.
-   Backend checks if a CustomerProfile exists for this Customer + Business.
-   If not: a CustomerProfile is created automatically.
+3. READ-ONLY LOYALTY STATUS
+   Authenticated customer fetches GET /api/customer/loyalty/:qrToken.
+   Backend idempotently ensures CustomerProfile exists for (customerId, businessId).
+   Strictly read-only: does NOT create an empty LoyaltyCycle or VisitRequest.
+   If no cycle has started, returns hasStarted: false and visitCount: 0.
 
-5. LOYALTY VIEW
-   Authenticated customer fetches their loyalty status.
-   Backend resolves program from the QR token context and returns:
-   current cycle, visitCount, cycleLength, enabled milestones with statuses,
-   unlocked MilestoneRewards.
-
-6. VISIT REQUEST
+4. VISIT REQUEST
    Customer taps "Request Stamp".
-   Frontend POSTs to /visit-requests with { qrToken } (or branchId resolved client-side
-   from the earlier QR lookup — but the program is always resolved server-side).
-   Backend creates a VisitRequest record (status: PENDING).
-   customerId is resolved from the customer JWT, never from the request body.
+   Frontend POSTs to /api/customer/visit-requests with { qrToken }.
+   Backend enforces: at most one PENDING request per (customerProfileId, branchId).
+   (Subsequent pending request to same branch returns 409 Conflict).
+   Backend creates VisitRequest record (status: PENDING).
 
-7. STAFF APPROVAL
-   Staff member (authenticated) sees pending requests on their dashboard.
-   Staff POSTs to /visit-requests/:id/approve (or /reject).
-   Backend verifies:
-     - The VisitRequest exists.
-     - The VisitRequest's branch belongs to the authenticated staff's business.
-     - The VisitRequest is in PENDING status.
-   On approval:
-     - VisitRequest.status → APPROVED
-     - A Visit record is created (linked to the current LoyaltyCycle).
-     - Milestone evaluation and cycle-completion check run (see §6).
-     - Response includes the updated loyalty state.
-   On rejection:
-     - VisitRequest.status → REJECTED
-     - No Visit is created. No milestone evaluation runs.
+5. STAFF OPERATIONAL QUEUE & ATOMIC RESOLUTION
+   Staff member sees pending requests on GET /api/staff/visit-requests (scoped to staff's assigned branchId).
+   Customer phone is masked (+91 ••••• ••421) for privacy.
+   Staff clicks Approve:
+     POST /api/staff/visit-requests/:id/approve executes an atomic PostgreSQL transaction:
+     - Atomically claims the request (WHERE id = :id AND status = 'PENDING').
+       Concurrent approval attempts result in exactly one 200 OK and one 409 Conflict.
+     - Lazily creates LoyaltyCycle 1 on first approved visit (visitCount = 1).
+     - Creates Visit record.
+     - Evaluates milestone: if rewardType != NONE, creates MilestoneReward (status: UNLOCKED) with snapshot fields.
+     - Cycle completion: if newVisitCount === cycleLength, marks cycle COMPLETED with completedAt.
+       Does NOT immediately create an empty Cycle N+1 (lazy rollover on next approved visit).
+   Staff clicks Reject:
+     POST /api/staff/visit-requests/:id/reject atomically updates status to REJECTED.
+     Customer is unblocked to submit a new request.
+
 
 8. CLIENT UPDATE
    Frontend invalidates the loyalty-status cache (TanStack Query).
@@ -522,8 +513,23 @@ Note: milestones with `rewardType: NONE` have no reward state. They are not repr
 ### Rules
 
 - **Unlocking** is automatic and triggered exclusively by the backend milestone evaluation step immediately following visit approval. Only milestones with a non-`NONE` reward type create a `MilestoneReward` record.
-- **Redemption** is performed by an authenticated `OWNER` or `STAFF` member. The customer cannot redeem their own reward — they present it to staff, who marks it redeemed.
-- **Duplicate redemption** is prevented by checking `MilestoneReward.status` before marking as redeemed. If status is already `REDEEMED`, the request is rejected with a `409 Conflict`.
+- **Redemption Token Security:**
+  - High-entropy 96-bit cryptographic token generated per unlocked reward (`RP-XXXX-XXXX-XXXX`).
+  - Raw token is **never** stored in the database.
+  - Only a deterministic SHA-256 hash is persisted in `redemptionTokenHash` (with unique index for $O(1)$ lookup).
+  - The raw token is returned to the authenticated customer on demand only while `status === 'UNLOCKED'`.
+  - For `REDEEMED` rewards, the raw token is completely omitted from responses.
+- **Presentation & Scanning:**
+  - Customer presents the opaque reward QR code or code on their mobile pass (`[ Show Reward ]`).
+  - QR payload contains exclusively the opaque token `RP-XXXX-XXXX-XXXX` (no URLs, internal DB IDs, customer/branch/business IDs).
+  - Staff or Owner taps **[ Scan Reward ]** on their dashboard, scanning via camera or typing the code manually.
+- **Validation & Redemption:**
+  - Read-only validation (`POST /api/staff/rewards/validate`) verifies token hash, branch scope, active status, and returns masked customer and snapshot reward info without mutating state.
+  - Redemption (`POST /api/staff/rewards/redeem-by-token`) atomically executes conditional update `status: UNLOCKED -> REDEEMED`.
+  - Concurrent attempts fail with `409 Conflict`.
+- **Operational Actor Recording:**
+  - Staff redemptions record the authenticated staff member's `Staff.id` in `redeemedByStaffId`.
+  - Owner redemptions resolve/ensure an operational `Staff` record linked to the Owner User via `resolveStaffRecord()`, preserving foreign key integrity without altering schema constraints.
 - **Cycle association:** Every `MilestoneReward` is tied to the `LoyaltyCycle` in which it was earned. If a customer is in Cycle 2 and previously had a reward in Cycle 1, those are separate `MilestoneReward` records. History is never overwritten.
 
 ### Redemption Fields on `MilestoneReward`
@@ -534,6 +540,8 @@ Note: milestones with `rewardType: NONE` have no reward state. They are not repr
 | `unlockedAt` | Timestamp when the milestone was reached |
 | `redeemedAt` | Timestamp when staff marked it redeemed (null if not yet redeemed) |
 | `redeemedByStaffId` | The `Staff.id` who performed redemption |
+| `redemptionTokenHash` | Deterministic SHA-256 hash of the reward redemption token (`@unique`) |
+| `redemptionTokenCreatedAt` | Timestamp when redemption token was generated |
 
 ---
 
@@ -750,8 +758,11 @@ The per-customer, per-cycle record of a reward unlock.
 | `unlockedAt` | DateTime | When the milestone was reached |
 | `redeemedAt` | DateTime | Null until redeemed |
 | `redeemedByStaffId` | UUID FK → `Staff.id` | Null until redeemed |
+| `redemptionTokenHash` | String | Unique SHA-256 hash of raw token (`RP-XXXX-XXXX-XXXX`) |
+| `redemptionTokenCreatedAt` | DateTime | When redemption token was created |
 
 **Unique constraint:** `(loyaltyCycleId, milestoneId)` — a milestone can only be unlocked once per cycle.  
+**Unique constraint:** `redemptionTokenHash` — fast deterministic lookup of reward token.  
 **Index:** `loyaltyCycleId`, `status`.
 
 ---
