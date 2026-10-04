@@ -406,12 +406,14 @@ Staff                                                          │
 **Rules:**
 
 - `(customerProfileId, programId, cycleNumber)` must be unique. This ensures sequential, non-duplicate cycle numbering per customer per program.
-- `visitCount` must be ≥ 0 at all times. It is incremented by 1 on each approved visit.
+- `visitCount` must be ≥ 0 at all times. It is incremented by 1 on each approved **QUALIFYING** visit. `REWARD_REDEMPTION` visits do not increment `visitCount`.
 - There must be **at most one `ACTIVE` cycle** per `(customerProfileId, programId)` at any time. A new `ACTIVE` cycle is only created after the previous cycle reaches `COMPLETED`. This is enforced by a PostgreSQL partial unique index (see §10) and application logic.
 - A cycle is `COMPLETED` when `visitCount === loyaltyProgram.cycleLength`. This check is performed by the application inside the visit approval transaction.
-- When a cycle completes: `status` becomes `COMPLETED`, `completedAt` is set, and a new `LoyaltyCycle` is created with `cycleNumber + 1`, `visitCount = 0`, `status = ACTIVE`.
+- **Lazy Cycle Rollover:** When a cycle completes: `status` becomes `COMPLETED`, `completedAt` is set, and the terminal milestone reward is unlocked. A new `LoyaltyCycle` (Cycle N+1) is **NOT** created immediately. It is created lazily on the customer's next approved qualifying visit with `cycleNumber = N + 1` and `visitCount = 1`.
 - Completed cycles are **never deleted**. All historical cycle data is preserved.
 - `customerProfileId` must belong to the same business as the `LoyaltyProgram`. Enforced by application logic.
+- **Frontend Presentation vs. Backend Counting:**
+  For a 4-visit program (`cycleLength = 4`), the customer UI renders 5 visual slots (`cycleLength + 1`): 4 qualifying stamp slots plus 1 reward redemption slot. The visual 5th slot represents reward redemption state (`4 of 5` before redemption, `5 of 5` after redemption) and must **NEVER** increment `LoyaltyCycle.visitCount`. Backend counting remains strictly bound to `cycleLength`.
 
 ---
 
@@ -448,26 +450,67 @@ Staff                                                          │
 
 ### `Visit`
 
-**Purpose:** A confirmed, approved customer visit. Created exclusively as a result of an approved `VisitRequest` — never directly by the client.
+**Purpose:** A confirmed customer store visit. Every physical customer store visit is represented by a `Visit` record. `VisitType` distinguishes loyalty-qualifying visits from reward-redemption visits. Only `QUALIFYING` visits increment `LoyaltyCycle.visitCount`. `REWARD_REDEMPTION` visits are recorded for analytics but do not affect loyalty progress.
 
 | Field | Type | Nullable | Notes |
 |---|---|---|---|
 | `id` | UUID | No | Primary key |
-| `loyaltyCycleId` | UUID FK → `LoyaltyCycle.id` | No | The cycle this visit belongs to |
-| `visitRequestId` | UUID FK → `VisitRequest.id` | No | The source request. Unique — one visit per request. |
-| `branchId` | UUID FK → `Branch.id` | No | The branch where the visit occurred |
-| `visitNumberInCycle` | Integer | No | The `visitCount` value of the cycle at the time this visit was recorded |
-| `approvedByStaffId` | UUID FK → `Staff.id` | No | Staff who approved the request |
-| `createdAt` | DateTime | No | Timestamp of approval (visit creation) |
+| `loyaltyCycleId` | UUID FK → `LoyaltyCycle.id` | No | The cycle this visit belongs to (active cycle for QUALIFYING, relevant/originating cycle for REWARD_REDEMPTION) |
+| `visitRequestId` | UUID FK → `VisitRequest.id` | Yes | Source request for `QUALIFYING` visits; `null` for `REWARD_REDEMPTION`. Unique constraint allows multiple nulls in PostgreSQL. |
+| `branchId` | UUID FK → `Branch.id` | No | The branch where the physical store visit occurred |
+| `visitType` | `VisitType` enum | No | `QUALIFYING` or `REWARD_REDEMPTION`. Default: `QUALIFYING`. |
+| `visitNumberInCycle` | Integer | Yes | The sequential stamp number (`visitCount`) within the cycle for `QUALIFYING` visits; `null` for `REWARD_REDEMPTION`. |
+| `approvedByStaffId` | UUID FK → `Staff.id` | No | Staff member who approved the visit request or processed the reward redemption |
+| `createdAt` | DateTime | No | Timestamp of visit creation |
 
 **Rules:**
 
-- `visitRequestId` must be unique — one `Visit` per `VisitRequest`. This prevents double-approval producing two visit records.
-- `visitNumberInCycle` is a snapshot of `LoyaltyCycle.visitCount` at the moment of approval. It must not be updated retroactively if cycle data changes.
-- `branchId` must match the branch associated with the `LoyaltyCycle`'s program. Enforced by application.
-- `approvedByStaffId` must belong to the same business as `branchId`. Enforced by application.
-- `Visit` records are **never deleted**. They are the permanent record of a customer's physical visit.
-- Visit history must not be rewritten to reflect later cycle edits or program changes.
+- **Every real physical store visit = `Visit` record.**
+  - **`QUALIFYING` Visit:** A normal customer visit that earns a loyalty stamp. Requires customer `VisitRequest` → staff approval flow. Increments `LoyaltyCycle.visitCount`. Sets `visitNumberInCycle = newVisitCount`.
+  - **`REWARD_REDEMPTION` Visit:** A real physical store visit where the customer redeems an already-unlocked reward. Does NOT create a `VisitRequest`. Does NOT increment `LoyaltyCycle.visitCount`. Does NOT create a loyalty stamp (`visitNumberInCycle = null`, `visitRequestId = null`). Created atomically during staff/owner reward redemption confirmation.
+- `visitRequestId` is unique when non-null. In PostgreSQL, standard unique constraints treat `NULL` as distinct, allowing multiple redemption visits with `visitRequestId = null` without conflict while strictly guaranteeing one `Visit` per `VisitRequest`.
+- `visitNumberInCycle` is set only for `QUALIFYING` visits (equal to the cycle's `visitCount` after incrementing). For `REWARD_REDEMPTION` visits, it is `null` because redemptions do not represent a loyalty stamp number.
+- `loyaltyCycleId` remains associated with the cycle from which the reward originated for `REWARD_REDEMPTION`, providing an unambiguous chain of custody to the customer profile without redundant fields.
+- `branchId` must match the branch where the interaction occurred.
+- `approvedByStaffId` records the staff member (or operational staff record linked to an owner) who authorized the visit or redemption.
+- `Visit` records are **never deleted**. They are the permanent record of a customer's physical store visits.
+- **Next Cycle:** Next loyalty cycle starts on the customer's next *qualifying* visit, not during reward redemption.
+- **Indexes:**
+  - `@@index([branchId, visitType])`
+  - `@@index([createdAt])`
+  - `@@index([branchId, createdAt])`
+  - `@@index([loyaltyCycleId, visitType])`
+
+#### Analytics Querying Distinctions
+Because every physical interaction creates a `Visit`, future analytics and reporting can query the table without schema migrations:
+
+1. **Total Physical Visits:**
+   ```sql
+   SELECT COUNT(*) FROM "Visit" WHERE "branchId" = :branchId;
+   ```
+2. **Qualifying Visits (Stamps Earned):**
+   ```sql
+   SELECT COUNT(*) FROM "Visit" WHERE "branchId" = :branchId AND "visitType" = 'QUALIFYING';
+   ```
+3. **Reward Redemption Visits:**
+   ```sql
+   SELECT COUNT(*) FROM "Visit" WHERE "branchId" = :branchId AND "visitType" = 'REWARD_REDEMPTION';
+   ```
+4. **Unique Visiting Customers:**
+   ```sql
+   SELECT COUNT(DISTINCT cp."customerId")
+   FROM "Visit" v
+   JOIN "LoyaltyCycle" lc ON v."loyaltyCycleId" = lc.id
+   JOIN "CustomerProfile" cp ON lc."customerProfileId" = cp.id
+   WHERE v."branchId" = :branchId;
+   ```
+5. **Visits Over Time & By Branch:**
+   ```sql
+   SELECT "branchId", DATE_TRUNC('day', "createdAt") AS day, "visitType", COUNT(*)
+   FROM "Visit"
+   GROUP BY "branchId", day, "visitType"
+   ORDER BY day DESC;
+   ```
 
 ---
 
@@ -508,6 +551,7 @@ Staff                                                          │
 - `redeemedByStaffId` must belong to the same business as the `LoyaltyCycle`'s program. Enforced by application.
 - `MilestoneReward` records are **never deleted**. Historical reward records must remain preserved exactly as they were when earned.
 - Redeeming an intermediate milestone reward does **not** complete the loyalty cycle. Cycle completion is determined solely by `visitCount === cycleLength`.
+- **Decoupled Reward Lifecycle & Physical Store Visit:** Milestone rewards are unlocked immediately when the qualifying visit reaches the milestone. Reward redemption is a separate transaction: it does NOT require a `VisitRequest`, does NOT increment `LoyaltyCycle.visitCount`, and does NOT start a new cycle. However, because reward redemption represents a real physical customer store visit, it atomically creates a `Visit` record with `visitType = REWARD_REDEMPTION`, `visitRequestId = null`, and `visitNumberInCycle = null` for accurate business and customer analytics. A separate `RewardVisit` model is not used.
 
 ---
 
@@ -567,6 +611,17 @@ REJECTED  — Staff rejected the request. No Visit was created.
 ```
 
 Only `PENDING → APPROVED` and `PENDING → REJECTED` transitions are valid. Resolved requests cannot be re-resolved.
+
+---
+
+### `VisitType`
+
+Used on: `Visit.visitType`
+
+```
+QUALIFYING        — A customer visit that earns a loyalty stamp. Increments LoyaltyCycle.visitCount.
+REWARD_REDEMPTION — A customer visit where an unlocked reward is redeemed. Recorded for analytics; does NOT increment visitCount.
+```
 
 ---
 

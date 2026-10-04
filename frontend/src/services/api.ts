@@ -4,6 +4,7 @@ import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
 export type SessionType = 'USER' | 'CUSTOMER';
 
 const SESSION_TYPE_KEY = 'crs_auth_session_type';
+const REFRESH_TOKEN_KEY = 'crs_auth_refresh_token';
 
 // In-memory access token holder (never stored in localStorage/sessionStorage)
 let inMemoryAccessToken: string | null = null;
@@ -14,6 +15,26 @@ export const getAccessToken = (): string | null => inMemoryAccessToken;
 
 export const setAccessToken = (token: string | null): void => {
   inMemoryAccessToken = token;
+};
+
+export const getFallbackRefreshToken = (): string | null => {
+  try {
+    return localStorage.getItem(REFRESH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+};
+
+export const setFallbackRefreshToken = (token: string | null): void => {
+  try {
+    if (token) {
+      localStorage.setItem(REFRESH_TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+    }
+  } catch {
+    // Ignore localStorage write errors
+  }
 };
 
 export const getSessionType = (): SessionType | null => {
@@ -34,6 +55,7 @@ export const setSessionType = (type: SessionType | null): void => {
       localStorage.setItem(SESSION_TYPE_KEY, type);
     } else {
       localStorage.removeItem(SESSION_TYPE_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
     }
   } catch {
     // Ignore localStorage write errors
@@ -49,7 +71,7 @@ export const setOnTokenRefreshed = (callback: (token: string) => void): void => 
 };
 
 const api = axios.create({
-  baseURL: import.meta.env?.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: import.meta.env?.VITE_API_URL || '/api',
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
@@ -103,6 +125,7 @@ export const refreshAccessToken = async (sessionTypeHint?: SessionType): Promise
     const error = new Error('No session type available for refresh');
     setAccessToken(null);
     setSessionType(null);
+    setFallbackRefreshToken(null);
     if (onUnauthenticatedCallback) {
       onUnauthenticatedCallback();
     }
@@ -113,16 +136,32 @@ export const refreshAccessToken = async (sessionTypeHint?: SessionType): Promise
 
   activeRefreshPromise = (async () => {
     try {
+      const fallbackToken = getFallbackRefreshToken();
+      const body: Record<string, any> = {};
+      const headers: Record<string, string> = {};
+      if (fallbackToken) {
+        body.refreshToken = fallbackToken;
+        headers['x-refresh-token'] = fallbackToken;
+      }
+
       // Use raw axios call directly to bypass interceptors
       const response = await axios.post(
         `${api.defaults.baseURL}${endpoint}`,
-        {},
-        { withCredentials: true }
+        body,
+        {
+          withCredentials: true,
+          headers: Object.keys(headers).length > 0 ? headers : undefined,
+        }
       );
 
       const newToken = response.data?.data?.accessToken;
       if (!newToken || typeof newToken !== 'string') {
         throw new Error('Refresh response missing access token');
+      }
+
+      const rotatedRefreshToken = response.data?.data?.refreshToken;
+      if (rotatedRefreshToken && typeof rotatedRefreshToken === 'string') {
+        setFallbackRefreshToken(rotatedRefreshToken);
       }
 
       setAccessToken(newToken);
@@ -134,6 +173,7 @@ export const refreshAccessToken = async (sessionTypeHint?: SessionType): Promise
     } catch (error) {
       setAccessToken(null);
       setSessionType(null);
+      setFallbackRefreshToken(null);
       if (onUnauthenticatedCallback) {
         onUnauthenticatedCallback();
       }

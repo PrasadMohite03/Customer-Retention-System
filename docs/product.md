@@ -384,14 +384,31 @@ The V1 loyalty system uses a **cycle-based milestone model**. A business defines
 
 #### Core Rules
 
-- Each approved staff visit adds 1 to the customer's visit count within the current loyalty cycle.
-- The system checks after every approved visit whether the visit count matches any enabled milestone.
+- Every real physical store visit creates a `Visit` record.
+- `VisitType` distinguishes `QUALIFYING` visits from `REWARD_REDEMPTION` visits.
+- Each approved **qualifying** visit adds 1 to the customer's visit count within the current loyalty cycle (`visitType = QUALIFYING`, `visitRequestId = request.id`).
+- Reward redemption visits (`visitType = REWARD_REDEMPTION`, `visitRequestId = null`, `visitNumberInCycle = null`) are real store visits recorded for analytics, but do **NOT** increment `LoyaltyCycle.visitCount` and do **NOT** create a `VisitRequest`.
+- The system checks after every approved qualifying visit whether the visit count matches any enabled milestone.
 - If a match is found and the milestone has a reward, that reward is **automatically unlocked**.
-- When unlocked, a secure redemption token is generated and its deterministic SHA-256 hash is stored in the database.
+- When unlocked, a secure redemption token (`RP-XXXX-XXXX-XXXX`) is generated and its deterministic SHA-256 hash is stored in the database.
 - Unlocking an **intermediate milestone** reward does **not** reset cycle progress — the customer continues toward the next milestone.
-- The cycle resets **only** when the customer reaches the **final configured milestone** (the highest visit number in the program). A new cycle then begins from Visit 1.
-- Each milestone is unlocked once per cycle. After a cycle reset, milestones become available again in the new cycle.
-- Staff or Owner marks an unlocked reward as **redeemed** by scanning the customer's reward QR or entering their redemption code at checkout. Customers have no self-redeem action.
+- The cycle completes when `visitCount === loyaltyProgram.cycleLength`.
+- Terminal rewards are unlocked immediately upon reaching `cycleLength` qualifying visits. The customer can redeem their reward at any time via Reward QR scan at checkout.
+- A new cycle (Cycle N+1) begins lazily on the customer's next approved **qualifying** visit (`cycleNumber = N + 1`, `visitCount = 1`).
+- Each milestone is unlocked once per cycle. After a cycle rollover, milestones become available again in the new cycle.
+- Staff or Owner marks an unlocked reward as **redeemed** by scanning the customer's reward QR or entering their redemption code at checkout. Atomically, status becomes `REDEEMED` and a `REWARD_REDEMPTION` `Visit` record is created. Customers have no self-redeem action.
+
+#### Customer Loyalty UI Visual Presentation (5-Slot Punch Card Rule)
+
+The customer loyalty pass provides an intuitive visual stamp card experience while preserving strict backend cycle counting:
+
+- **Backend `cycleLength = 4`**: Exactly 4 qualifying visits are required to complete the cycle and unlock the terminal reward.
+- **Frontend Card (`totalVisualSlots = 5`)**: The UI renders `cycleLength + 1` visual slots:
+  - 4 qualifying stamp slots + 1 reward redemption slot.
+  - **In Progress (e.g. 2 visits):** Displays `2 of 5` with 2 green checks and slot 5 showing the locked reward icon (`[🎁]`).
+  - **Cycle Complete & Reward Unlocked (4 visits):** Displays `4 of 5` (`4 qualifying visits completed`) with 4 green checks and slot 5 showing an active/unlocked reward (`[🎁] Reward`). Primary action switches to **[ Show Reward ]**.
+  - **Reward Redeemed:** Displays `5 of 5` (`Reward redeemed • Cycle completed`) with 5 green checks (`[✓] [✓] [✓] [✓] [✓]`).
+  - **CRITICAL SEPARATION:** The visual 5th slot represents reward redemption, NOT a 5th qualifying visit, and must **never** increment `LoyaltyCycle.visitCount`. Backend counting remains strictly bound to `cycleLength = 4`.
 
 #### Milestone Configuration
 
@@ -417,30 +434,38 @@ A business configures milestones at the program level. Each milestone has:
 #### Example Program Configuration
 
 ```
-Program: "Café Rewards"  (cycle length: 7 visits)
+Program: "Café Rewards"  (cycle length: 4 qualifying visits)
 
-Milestone 1: Visit 1 → No Reward  (enabled)
-Milestone 2: Visit 5 → 25% OFF   (enabled)  ← intermediate
-Milestone 3: Visit 7 → 50% OFF   (enabled)  ← final milestone; completing this resets the cycle
+Milestone 1: Visit 2 → 10% OFF      (enabled)  ← intermediate reward
+Milestone 2: Visit 4 → Free Coffee  (enabled)  ← terminal reward at cycle completion
 ```
 
 #### Customer Experience
 
 ```
-Cycle 1 — Customer on Visit 4:
+Cycle 1 — Customer on Qualifying Visit 2:
   ✅ Visit 1 — (no reward)
-  ⏳ Visit 5 — 25% OFF  (1 visit away)
-  ⏳ Visit 7 — 50% OFF  (3 visits away)
+  ✅ Visit 2 — 10% OFF 🎉 [Unlocked — ready to redeem at any time]
+  ⏳ Visit 4 — Free Coffee (2 visits away)
+  Card displays: "2 of 5" stamps.
 
-After Visit 5 is approved:
-  ✅ Visit 5 — 25% OFF 🎉  [Unlocked — ready to redeem]
-  Cycle continues. Progress does NOT reset.
-  Customer is now on Visit 5, heading toward Visit 7.
+After Qualifying Visit 4 is approved:
+  ✅ Visit 4 — Free Coffee 🎉 [Unlocked]
+  visitCount = 4 === cycleLength (4) → Cycle 1 COMPLETED.
+  Card displays: "4 of 5" ("4 qualifying visits completed").
+  Customer taps [ Show Reward ] to show Reward QR to staff.
 
-After Visit 7 is approved:
-  ✅ Visit 7 — 50% OFF 🎉  [Unlocked]
-  Cycle 1 complete → Cycle 2 begins. Visit count resets to 1.
-  Milestones at Visit 5 and Visit 7 become available again in Cycle 2.
+Physical Store Reward Redemption Visit:
+  Staff scans Reward QR and confirms redemption.
+  Atomically: Reward status becomes REDEEMED.
+  A Visit record is created: visitType = REWARD_REDEMPTION.
+  LoyaltyCycle.visitCount remains 4.
+  Card displays: "5 of 5" ("Reward redeemed • Cycle completed").
+
+Next Qualifying Store Visit:
+  Customer requests stamp via branch QR.
+  Staff approves: Cycle 2 created lazily with cycleNumber = 2, visitCount = 1.
+  Card resets to: "1 of 5" for Cycle 2.
 ```
 
 ### 10.2 Design for Extensibility
@@ -759,3 +784,71 @@ If this complete flow works reliably and without errors for a real business with
 | **Phase 6** | Scale | Full multi-branch management, advanced staff permissions, third-party integrations, white-labeling, larger business capabilities | 🔮 Planned |
 
 > The roadmap reflects the intended direction. Phases may be reordered based on real-world validation and business feedback after the MVP launch.
+
+---
+
+## 20. Customer Experience & Mobile-First App Architecture
+
+RetainPulse provides a consumer-grade, mobile-first web app experience for customers without requiring a native app store download.
+
+### 20.1 Customer Navigation & Screen Hierarchy
+
+```
+Customer Mobile Shell (CustomerLayout)
+├── Persistent Bottom Navigation
+│   ├── 1. Home (/customer/dashboard)
+│   ├── 2. Explore (/customer/explore)
+│   ├── 3. Central Scan [Elevated Primary Action] (/customer/scan)
+│   ├── 4. Rewards (/customer/rewards)
+│   └── 5. Profile (/customer/profile)
+└── Branch Loyalty Pass (/loyalty/:qrToken)
+```
+
+### 20.2 Screen Responsibilities
+
+1. **Home (`/customer/dashboard`)**:
+   - Customer greeting ("Welcome back, [Name]")
+   - Hero active loyalty card carousel / punch cards
+   - Stamp progress ($X / N$ visits) and next upcoming reward milestone
+   - Quick action banner: "At a shop right now? Scan QR at the counter"
+   - Recently visited places and empty state prompting exploration or QR scanning.
+
+2. **Explore (`/customer/explore`)**:
+   - Backed by real database records only (`GET /api/customer/explore`) — no mock distances, fake ratings, or placeholder shops.
+   - Search across business names, branch names, addresses, and loyalty program names.
+   - Category filtering (`ALL`, `CAFE`, `SALON`, `RESTAURANT`, `FITNESS`, `RETAIL`).
+   - Cards display real branch location, active program name, cycle length, and milestones.
+   - Real-time customer enrollment indicator (`isEnrolled`) and current visit progress (`currentVisitCount`).
+   - Standard server-side pagination with controls for browsing multiple pages of businesses.
+
+3. **Central Scan Action (`/customer/scan`)**:
+   - Visually prominent, elevated center button in bottom navigation
+   - Mobile camera scanner using `html5-qrcode` to scan in-store branch QR code
+   - Resolves branch `qrToken` and routes smoothly to the loyalty pass / stamp request.
+
+4. **Loyalty Pass & Program Detail (`/loyalty/:qrToken`)**:
+   - Polished mobile punch card representation using the 5-slot visual model (`totalVisualSlots = cycleLength + 1`).
+   - Business & branch header with active program metadata.
+   - Visual stamp grid displaying 4 qualifying stamp slots plus 1 reward redemption slot.
+   - Visual states: `X of 5` in progress, `4 of 5` when cycle complete with reward unlocked, and `5 of 5` upon redemption.
+   - Action states: "Request a Stamp" CTA with live polling for staff approval when in progress; "Show Reward" CTA when milestone reward is unlocked.
+   - Dedicated "Earned Rewards" drawer with full QR presentation modal for checkout redemption.
+
+5. **Rewards (`/customer/rewards`)**:
+   - Dedicated customer reward wallet
+   - Filter tabs: "All", "Available" (UNLOCKED), "Redeemed"
+   - "Show Reward" presenting secure SVG QR code and redemption token for in-store staff scan
+   - Historical redemption records.
+
+6. **Profile (`/customer/profile`)**:
+   - Customer name, verified phone badge
+   - Lifetime summary (total visits, rewards unlocked, active programs)
+   - Quick support / help information
+   - Secure logout.
+
+### 20.3 End-to-End Customer Lifecycle
+
+```
+DISCOVER → JOIN → SCAN → REQUEST STAMP → STAFF APPROVES → PROGRESS → MILESTONE → REWARD UNLOCKED → SHOW REWARD → STAFF REDEEMS → RETURN
+```
+

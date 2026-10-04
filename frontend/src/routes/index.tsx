@@ -14,7 +14,12 @@ import { LoyaltyProgram } from '../pages/owner/LoyaltyProgram';
 import { StaffManagement } from '../pages/owner/StaffManagement';
 import { OwnerVisitRequests } from '../pages/owner/OwnerVisitRequests';
 import { StaffDashboard } from '../pages/staff/StaffDashboard';
+import { CustomerLayout } from '../layouts/CustomerLayout';
 import { CustomerDashboard } from '../pages/customer/CustomerDashboard';
+import { CustomerExplore } from '../pages/customer/CustomerExplore';
+import { CustomerScan } from '../pages/customer/CustomerScan';
+import { CustomerRewards } from '../pages/customer/CustomerRewards';
+import { CustomerProfile } from '../pages/customer/CustomerProfile';
 import { ProtectedRoute, PublicOnlyRoute } from './guards';
 
 export const router = createBrowserRouter([
@@ -102,13 +107,41 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
   },
+
+  // Role Protected Customer App Experience
   {
-    path: '/customer/dashboard',
+    path: '/customer',
     element: (
       <ProtectedRoute allowedRoles={['CUSTOMER']}>
-        <CustomerDashboard />
+        <CustomerLayout />
       </ProtectedRoute>
     ),
+    children: [
+      {
+        index: true,
+        element: <Navigate to="/customer/dashboard" replace />,
+      },
+      {
+        path: 'dashboard',
+        element: <CustomerDashboard />,
+      },
+      {
+        path: 'explore',
+        element: <CustomerExplore />,
+      },
+      {
+        path: 'scan',
+        element: <CustomerScan />,
+      },
+      {
+        path: 'rewards',
+        element: <CustomerRewards />,
+      },
+      {
+        path: 'profile',
+        element: <CustomerProfile />,
+      },
+    ],
   },
 
   {

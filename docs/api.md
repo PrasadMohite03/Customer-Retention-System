@@ -213,6 +213,7 @@ Logically read-only with respect to loyalty state. Idempotently creates `Custome
 `POST /api/customer/visit-requests`
 
 Submits a visit stamp request. Enforces at most one `PENDING` request per `(customerProfileId, branchId)`.
+*Note:* Visit requests are exclusively for earning visits / stamps. Customers with unlocked rewards do NOT need to submit a visit request to redeem their reward. Milestone rewards are unlocked immediately upon milestone visit approval.
 
 **Request Body:**
 ```json
@@ -232,6 +233,67 @@ Submits a visit stamp request. Enforces at most one `PENDING` request per `(cust
 `GET /api/customer/history`
 
 Returns completed cycles, visit logs, and reward history across all businesses visited by the authenticated customer.
+
+### Customer Explore Businesses & Programs
+`GET /api/customer/explore`
+
+Enables customers to discover participating businesses, browse active branch locations and loyalty programs, and view their current enrollment/progress across stores.
+
+- **Data Integrity:** Queries real database businesses with active branches and active loyalty programs only. Contains no mock distances, fake ratings, or placeholder data.
+- **Query Parameters:**
+  - `page` (optional, integer, default: `1`, minimum: `1`): Current page number.
+  - `limit` (optional, integer, default: `12`, minimum: `1`, maximum: `20`): Page size limit.
+  - `category` (optional, string): Case-insensitive category filter (`ALL`, `CAFE`, `SALON`, `RESTAURANT`, `FITNESS`, `RETAIL`).
+  - `search` (optional, string): Case-insensitive substring match against business name, branch name, address, or loyalty program name.
+- **Responses:**
+  - `200 OK`:
+    ```json
+    {
+      "status": "success",
+      "data": {
+        "items": [
+          {
+            "id": "business-uuid",
+            "name": "Apex Coffee Roasters",
+            "type": "CAFE",
+            "branch": {
+              "id": "branch-uuid",
+              "name": "Downtown Roastery",
+              "address": "123 Main St",
+              "qrToken": "qr_br1_xyz"
+            },
+            "program": {
+              "id": "program-uuid",
+              "name": "Coffee Lovers Club",
+              "description": "Collect stamps for free brew",
+              "cycleLength": 4,
+              "milestones": [
+                {
+                  "id": "milestone-uuid",
+                  "visitNumber": 4,
+                  "rewardType": "FREE_ITEM",
+                  "rewardName": "Free Pour-Over Coffee",
+                  "rewardDescription": "Any single-origin pour-over",
+                  "rewardValue": null
+                }
+              ]
+            },
+            "isEnrolled": true,
+            "currentVisitCount": 2
+          }
+        ],
+        "pagination": {
+          "page": 1,
+          "limit": 12,
+          "total": 1,
+          "totalPages": 1,
+          "hasNextPage": false,
+          "hasPreviousPage": false
+        }
+      }
+    }
+    ```
+  - `401 Unauthorized`: Missing or invalid customer JWT.
 
 ---
 
@@ -333,9 +395,10 @@ Executes the atomic approval transaction:
 1. Atomically claims the `PENDING` request (concurrent duplicate approvals fail with `409 Conflict`).
 2. Verifies staff active status and branch assignment.
 3. Lazily creates `LoyaltyCycle` 1 on first approved visit (gracefully handling concurrent creation race).
-4. Creates `Visit` record.
-5. Evaluates milestones and snapshots reward data if rewardType != `NONE`.
+4. Creates `Visit` record with `visitType = QUALIFYING`, `visitRequestId = request.id`, and `visitNumberInCycle = newVisitCount`.
+5. Evaluates milestones and snapshots reward data if rewardType != `NONE`. If a milestone is reached, `MilestoneReward` is created immediately with `status = UNLOCKED` and a cryptographic redemption token is generated.
 6. Completes cycle if `visitCount === cycleLength` (does NOT immediately create empty next cycle).
+*Rule:* Milestone rewards are unlocked immediately when the approved qualifying visit reaches the milestone. Reward redemption is a separate transaction that does not require a VisitRequest and does not increment loyalty cycle count, but atomically creates a Visit with `visitType = REWARD_REDEMPTION` for footfall analytics.
 
 **Responses:**
 - `200 OK`:
@@ -414,10 +477,12 @@ Validates a customer-presented reward QR or redemption code without redeeming it
 ### Redeem Reward by Token (Atomic Mutation)
 `POST /api/staff/rewards/redeem-by-token`
 
-Atomically transitions the reward identified by `rewardToken` from `UNLOCKED` to `REDEEMED`.
-- For `STAFF`: Uses authenticated staff record as `redeemedByStaffId`.
+Atomically transitions the reward identified by `rewardToken` from `UNLOCKED` to `REDEEMED` and creates a physical store `Visit` record.
+- For `STAFF`: Uses authenticated staff record as `redeemedByStaffId` and `approvedByStaffId`.
 - For `OWNER`: Resolves/creates an operational `Staff` record linked to the Owner `User` via `resolveStaffRecord()`.
-- Thread-safe conditional update: concurrent duplicate calls return `409 Conflict`.
+- **Atomic Visit Creation:** Creates a `Visit` with `visitType = REWARD_REDEMPTION`, `visitRequestId = null`, `visitNumberInCycle = null`, `branchId = branch.id`, and `loyaltyCycleId = reward.loyaltyCycleId`.
+- *Rule:* Does NOT increment `LoyaltyCycle.visitCount` and does NOT start the next cycle. Next cycle starts on next qualifying visit.
+- Thread-safe conditional update: concurrent duplicate calls return `409 Conflict` (no duplicate Visit created).
 
 **Request Body:**
 ```json
@@ -437,7 +502,7 @@ Atomically transitions the reward identified by `rewardToken` from `UNLOCKED` to
       "status": "REDEEMED",
       "redeemedAt": "2026-10-03T10:05:00.000Z",
       "rewardName": "Head Massage",
-      "customerName": "Alice Wonderland"
+      "visitId": "visit-uuid"
     }
   }
   ```

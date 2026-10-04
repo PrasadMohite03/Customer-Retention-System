@@ -87,6 +87,11 @@ export class CustomerLoyaltyService {
         programId: activeProgram.id,
         status: 'COMPLETED',
       },
+      include: {
+        milestoneRewards: {
+          orderBy: { unlockedAt: 'desc' },
+        },
+      },
       orderBy: { cycleNumber: 'desc' },
     });
 
@@ -120,6 +125,28 @@ export class CustomerLoyaltyService {
       orderBy: { unlockedAt: 'desc' },
     });
 
+    // Determine effective cycle for current loyalty display:
+    // 1. If an ACTIVE cycle exists, it is the effective cycle.
+    // 2. If no ACTIVE cycle exists, check if the latest completed cycle has any UNLOCKED reward.
+    //    If so, the customer has unlocked a reward in that completed cycle,
+    //    so the effective cycle remains the completed cycle (showing full visits and the UNLOCKED reward).
+    // 3. Otherwise, if the latest completed cycle exists and its rewards are redeemed,
+    //    the previous cycle is completed and customer is ready for next cycle (0 visits towards Cycle N+1).
+    const hasUnlockedRewardInCompletedCycle =
+      !activeCycle &&
+      Boolean(latestCompletedCycle?.milestoneRewards.some((r) => r.status === 'UNLOCKED'));
+
+    const effectiveCycle = activeCycle || (hasUnlockedRewardInCompletedCycle ? latestCompletedCycle : null);
+    const effectiveCycleId = effectiveCycle?.id || null;
+
+    const currentVisitCount = effectiveCycle ? effectiveCycle.visitCount : 0;
+    const cycleRewardsMap = new Map<string, any>();
+    if (effectiveCycle) {
+      for (const reward of effectiveCycle.milestoneRewards) {
+        cycleRewardsMap.set(reward.milestoneId, reward);
+      }
+    }
+
     const earnedRewards = allMilestoneRewards.map((r) => {
       let redemptionToken: string | null = null;
       if (r.status === 'UNLOCKED') {
@@ -137,7 +164,7 @@ export class CustomerLoyaltyService {
         unlockedAt: r.unlockedAt,
         redeemedAt: r.redeemedAt,
         cycleNumber: r.loyaltyCycle.cycleNumber,
-        isCurrentCycle: activeCycle ? r.loyaltyCycle.id === activeCycle.id : false,
+        isCurrentCycle: effectiveCycleId ? r.loyaltyCycle.id === effectiveCycleId : false,
         redemptionToken,
       };
     });
@@ -145,17 +172,8 @@ export class CustomerLoyaltyService {
     const unlockedRewards = earnedRewards.filter((r) => r.status === 'UNLOCKED');
     const redeemedRewards = earnedRewards.filter((r) => r.status === 'REDEEMED');
 
-    // Compute status of current cycle milestones (for current active cycle progress)
-    const currentVisitCount = activeCycle ? activeCycle.visitCount : 0;
-    const activeCycleRewardsMap = new Map<string, any>();
-    if (activeCycle) {
-      for (const reward of activeCycle.milestoneRewards) {
-        activeCycleRewardsMap.set(reward.milestoneId, reward);
-      }
-    }
-
     const milestonesWithStatus = activeProgram.milestones.map((m) => {
-      const rewardRecord = activeCycleRewardsMap.get(m.id);
+      const rewardRecord = cycleRewardsMap.get(m.id);
       let status: 'LOCKED' | 'UNLOCKED' | 'REDEEMED' = 'LOCKED';
 
       if (rewardRecord) {
@@ -185,6 +203,20 @@ export class CustomerLoyaltyService {
           cycleLength: activeProgram.cycleLength,
           status: activeCycle.status,
           startedAt: activeCycle.startedAt,
+          completedAt: null,
+          isCycleCompleted: false,
+        }
+      : hasUnlockedRewardInCompletedCycle && latestCompletedCycle
+      ? {
+          hasStarted: true,
+          id: latestCompletedCycle.id,
+          cycleNumber: latestCompletedCycle.cycleNumber,
+          visitCount: latestCompletedCycle.visitCount,
+          cycleLength: activeProgram.cycleLength,
+          status: 'COMPLETED',
+          startedAt: latestCompletedCycle.startedAt,
+          completedAt: latestCompletedCycle.completedAt,
+          isCycleCompleted: true,
         }
       : latestCompletedCycle
       ? {
@@ -193,8 +225,11 @@ export class CustomerLoyaltyService {
           cycleNumber: latestCompletedCycle.cycleNumber + 1,
           visitCount: 0,
           cycleLength: activeProgram.cycleLength,
-          status: 'ACTIVE',
+          status: 'COMPLETED',
           startedAt: null,
+          completedAt: latestCompletedCycle.completedAt,
+          isCycleCompleted: true,
+          previousCycleNumber: latestCompletedCycle.cycleNumber,
         }
       : {
           hasStarted: false,
@@ -204,6 +239,8 @@ export class CustomerLoyaltyService {
           cycleLength: activeProgram.cycleLength,
           status: null,
           startedAt: null,
+          completedAt: null,
+          isCycleCompleted: false,
         };
 
     return {
@@ -312,7 +349,14 @@ export class CustomerLoyaltyService {
     const profiles = await prisma.customerProfile.findMany({
       where: { customerId },
       include: {
-        business: true,
+        business: {
+          include: {
+            branches: {
+              where: { isActive: true },
+              select: { id: true, name: true, address: true, qrToken: true },
+            },
+          },
+        },
         loyaltyCycles: {
           orderBy: { startedAt: 'desc' },
           include: {
@@ -333,6 +377,8 @@ export class CustomerLoyaltyService {
       business: {
         id: p.business.id,
         name: p.business.name,
+        type: (p.business as any).type || null,
+        branches: p.business.branches,
       },
       cycles: p.loyaltyCycles.map((c) => ({
         id: c.id,
@@ -341,26 +387,324 @@ export class CustomerLoyaltyService {
         visitCount: c.visitCount,
         cycleLength: c.program.cycleLength,
         programName: c.program.name,
+        qrToken: p.business.branches[0]?.qrToken || c.visits[0]?.branch?.qrToken || null,
         startedAt: c.startedAt,
         completedAt: c.completedAt,
         visits: c.visits.map((v) => ({
           id: v.id,
+          visitType: v.visitType,
           visitNumberInCycle: v.visitNumberInCycle,
           branchName: v.branch.name,
           createdAt: v.createdAt,
         })),
-        rewards: c.milestoneRewards.map((r) => ({
-          id: r.id,
-          rewardType: r.snapshotRewardType,
-          rewardName: r.snapshotRewardName,
-          rewardValue: r.snapshotRewardValue ? r.snapshotRewardValue.toString() : null,
-          status: r.status,
-          unlockedAt: r.unlockedAt,
-          redeemedAt: r.redeemedAt,
-        })),
+        rewards: c.milestoneRewards.map((r) => {
+          let redemptionToken: string | null = null;
+          if (r.status === 'UNLOCKED') {
+            redemptionToken = deriveRedemptionTokenForReward(r.id);
+          }
+          return {
+            id: r.id,
+            rewardType: r.snapshotRewardType,
+            rewardName: r.snapshotRewardName,
+            rewardValue: r.snapshotRewardValue ? r.snapshotRewardValue.toString() : null,
+            status: r.status,
+            unlockedAt: r.unlockedAt,
+            redeemedAt: r.redeemedAt,
+            redemptionToken,
+          };
+        }),
       })),
     }));
 
     return history;
   }
+
+  /**
+   * Retrieves active businesses with active loyalty programs for customer exploration with
+   * database-level server-side pagination, category filtering, and search.
+   * Real database data only.
+   */
+  static async getCustomerExplore(
+    customerId: string,
+    options: {
+      page?: number;
+      limit?: number;
+      category?: string;
+      search?: string;
+    } = {}
+  ) {
+    const pageNum = Math.max(1, parseInt(String(options.page || 1), 10) || 1);
+    const limitNum = Math.min(20, Math.max(1, parseInt(String(options.limit || 12), 10) || 12));
+    const skip = (pageNum - 1) * limitNum;
+
+    const andConditions: any[] = [
+      {
+        branches: {
+          some: {
+            isActive: true,
+            loyaltyPrograms: { some: { isActive: true } },
+          },
+        },
+      },
+    ];
+
+    // Search query condition
+    const q = options.search?.trim();
+    if (q) {
+      andConditions.push({
+        OR: [
+          { name: { contains: q, mode: 'insensitive' } },
+          {
+            branches: {
+              some: {
+                isActive: true,
+                OR: [
+                  { name: { contains: q, mode: 'insensitive' } },
+                  { address: { contains: q, mode: 'insensitive' } },
+                  {
+                    loyaltyPrograms: {
+                      some: {
+                        isActive: true,
+                        name: { contains: q, mode: 'insensitive' },
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      });
+    }
+
+    // Category filter condition
+    const cat = options.category?.trim().toUpperCase();
+    if (cat && cat !== 'ALL') {
+      if (cat === 'CAFE') {
+        andConditions.push({
+          OR: [
+            { type: { equals: 'CAFE', mode: 'insensitive' } },
+            { type: { equals: 'Cafe', mode: 'insensitive' } },
+            {
+              AND: [
+                { type: null },
+                {
+                  OR: [
+                    { name: { contains: 'coffee', mode: 'insensitive' } },
+                    { name: { contains: 'cafe', mode: 'insensitive' } },
+                    { name: { contains: 'roaster', mode: 'insensitive' } },
+                    { name: { contains: 'bakery', mode: 'insensitive' } },
+                  ],
+                },
+              ],
+            },
+          ],
+        });
+      } else if (cat === 'SALON') {
+        andConditions.push({
+          OR: [
+            { type: { equals: 'SALON', mode: 'insensitive' } },
+            { type: { equals: 'Salon', mode: 'insensitive' } },
+            {
+              AND: [
+                { type: null },
+                {
+                  OR: [
+                    { name: { contains: 'salon', mode: 'insensitive' } },
+                    { name: { contains: 'spa', mode: 'insensitive' } },
+                  ],
+                },
+              ],
+            },
+          ],
+        });
+      } else if (cat === 'RESTAURANT') {
+        andConditions.push({
+          OR: [
+            { type: { equals: 'RESTAURANT', mode: 'insensitive' } },
+            { type: { equals: 'Restaurant', mode: 'insensitive' } },
+            { type: { equals: 'Dining', mode: 'insensitive' } },
+            {
+              AND: [
+                { type: null },
+                {
+                  OR: [
+                    { name: { contains: 'restaurant', mode: 'insensitive' } },
+                    { name: { contains: 'dining', mode: 'insensitive' } },
+                    { name: { contains: 'bistro', mode: 'insensitive' } },
+                    { name: { contains: 'pizza', mode: 'insensitive' } },
+                    { name: { contains: 'food', mode: 'insensitive' } },
+                  ],
+                },
+              ],
+            },
+          ],
+        });
+      } else if (cat === 'FITNESS') {
+        andConditions.push({
+          OR: [
+            { type: { equals: 'FITNESS', mode: 'insensitive' } },
+            { type: { equals: 'Fitness', mode: 'insensitive' } },
+            {
+              AND: [
+                { type: null },
+                {
+                  OR: [
+                    { name: { contains: 'fitness', mode: 'insensitive' } },
+                    { name: { contains: 'gym', mode: 'insensitive' } },
+                  ],
+                },
+              ],
+            },
+          ],
+        });
+      } else if (cat === 'RETAIL') {
+        andConditions.push({
+          OR: [
+            { type: { equals: 'RETAIL', mode: 'insensitive' } },
+            { type: { equals: 'Retail', mode: 'insensitive' } },
+            {
+              AND: [
+                { type: null },
+                {
+                  OR: [
+                    { name: { contains: 'retail', mode: 'insensitive' } },
+                    { name: { contains: 'store', mode: 'insensitive' } },
+                    { name: { contains: 'shop', mode: 'insensitive' } },
+                  ],
+                },
+              ],
+            },
+          ],
+        });
+      } else {
+        andConditions.push({
+          type: { equals: cat, mode: 'insensitive' },
+        });
+      }
+    }
+
+    const where = { AND: andConditions };
+
+    const [total, businesses] = await Promise.all([
+      prisma.business.count({ where }),
+      prisma.business.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { name: 'asc' },
+        include: {
+          branches: {
+            where: {
+              isActive: true,
+              loyaltyPrograms: { some: { isActive: true } },
+            },
+            include: {
+              loyaltyPrograms: {
+                where: { isActive: true },
+                include: {
+                  milestones: {
+                    where: { isEnabled: true },
+                    orderBy: { visitNumber: 'asc' },
+                  },
+                },
+              },
+            },
+          },
+          customerProfiles: {
+            where: { customerId },
+            include: {
+              loyaltyCycles: {
+                where: { status: 'ACTIVE' },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const totalPages = Math.ceil(total / limitNum) || 1;
+    const hasNextPage = pageNum < totalPages;
+    const hasPreviousPage = pageNum > 1;
+
+    const items = businesses.map((b) => {
+      const activeBranch = b.branches[0];
+      const activeProgram = activeBranch?.loyaltyPrograms[0];
+      const profile = b.customerProfiles[0];
+      const activeCycle = profile?.loyaltyCycles[0];
+
+      let normalizedType = b.type ? b.type.trim().toUpperCase() : null;
+      if (!normalizedType) {
+        const lowerName = b.name.toLowerCase();
+        if (
+          lowerName.includes('coffee') ||
+          lowerName.includes('cafe') ||
+          lowerName.includes('roaster') ||
+          lowerName.includes('bakery')
+        ) {
+          normalizedType = 'CAFE';
+        } else if (lowerName.includes('spa') || lowerName.includes('salon')) {
+          normalizedType = 'SALON';
+        } else if (
+          lowerName.includes('restaurant') ||
+          lowerName.includes('dining') ||
+          lowerName.includes('bistro') ||
+          lowerName.includes('pizza') ||
+          lowerName.includes('food')
+        ) {
+          normalizedType = 'RESTAURANT';
+        } else if (lowerName.includes('gym') || lowerName.includes('fitness')) {
+          normalizedType = 'FITNESS';
+        } else {
+          normalizedType = 'RETAIL';
+        }
+      }
+
+      return {
+        id: b.id,
+        name: b.name,
+        type: normalizedType,
+        branch: activeBranch
+          ? {
+              id: activeBranch.id,
+              name: activeBranch.name,
+              address: activeBranch.address,
+              qrToken: activeBranch.qrToken,
+            }
+          : null,
+        program: activeProgram
+          ? {
+              id: activeProgram.id,
+              name: activeProgram.name,
+              description: activeProgram.description,
+              cycleLength: activeProgram.cycleLength,
+              milestones: activeProgram.milestones.map((m) => ({
+                id: m.id,
+                visitNumber: m.visitNumber,
+                rewardType: m.rewardType,
+                rewardName: m.rewardName,
+                rewardDescription: m.rewardDescription,
+                rewardValue: m.rewardValue ? m.rewardValue.toString() : null,
+              })),
+            }
+          : null,
+        isEnrolled: !!profile,
+        currentVisitCount: activeCycle ? activeCycle.visitCount : 0,
+      };
+    });
+
+    return {
+      items,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages,
+        hasNextPage,
+        hasPreviousPage,
+      },
+    };
+  }
 }
+
+

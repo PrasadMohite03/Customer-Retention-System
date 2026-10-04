@@ -30,6 +30,11 @@ enum VisitRequestStatus {
   REJECTED
 }
 
+enum VisitType {
+  QUALIFYING
+  REWARD_REDEMPTION
+}
+
 enum MilestoneRewardStatus {
   UNLOCKED
   REDEEMED
@@ -219,21 +224,26 @@ model VisitRequest {
 }
 
 model Visit {
-  id                 String   @id @default(uuid())
+  id                 String    @id @default(uuid())
   loyaltyCycleId     String
-  visitRequestId     String   @unique
+  visitRequestId     String?   @unique
   branchId           String
-  visitNumberInCycle Int
+  visitType          VisitType @default(QUALIFYING)
+  visitNumberInCycle Int?
   approvedByStaffId  String
-  createdAt          DateTime @default(now())
+  createdAt          DateTime  @default(now())
 
-  loyaltyCycle    LoyaltyCycle @relation("LoyaltyCycleVisits", fields: [loyaltyCycleId], references: [id], onDelete: Restrict)
-  visitRequest    VisitRequest @relation("VisitRequestVisit", fields: [visitRequestId], references: [id], onDelete: Restrict)
-  branch          Branch       @relation("BranchVisits", fields: [branchId], references: [id], onDelete: Restrict)
-  approvedByStaff Staff        @relation("StaffApprovedVisits", fields: [approvedByStaffId], references: [id], onDelete: Restrict)
+  loyaltyCycle    LoyaltyCycle  @relation("LoyaltyCycleVisits", fields: [loyaltyCycleId], references: [id], onDelete: Restrict)
+  visitRequest    VisitRequest? @relation("VisitRequestVisit", fields: [visitRequestId], references: [id], onDelete: Restrict)
+  branch          Branch        @relation("BranchVisits", fields: [branchId], references: [id], onDelete: Restrict)
+  approvedByStaff Staff         @relation("StaffApprovedVisits", fields: [approvedByStaffId], references: [id], onDelete: Restrict)
 
   @@index([loyaltyCycleId])
   @@index([branchId])
+  @@index([branchId, visitType])
+  @@index([createdAt])
+  @@index([branchId, createdAt])
+  @@index([loyaltyCycleId, visitType])
 }
 
 model MilestoneReward {

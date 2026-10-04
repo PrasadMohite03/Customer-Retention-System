@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { Prisma, UserRole } from '@prisma/client';
+import { Prisma, UserRole, VisitType } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { AppError } from '../utils/errors';
 import { maskPhone } from '../utils/phone.utils';
@@ -293,6 +293,7 @@ export class StaffVisitService {
           loyaltyCycleId: activeCycle.id,
           visitRequestId: requestToApprove.id,
           branchId: requestToApprove.branchId,
+          visitType: VisitType.QUALIFYING,
           visitNumberInCycle: newVisitCount,
           approvedByStaffId: operationalStaff.id,
           createdAt: new Date(),
@@ -483,30 +484,49 @@ export class StaffVisitService {
       operationalStaff = await this.resolveStaffRecord(user, reward.loyaltyCycle.program.branchId);
     }
 
-    const updateResult = await prisma.milestoneReward.updateMany({
-      where: {
+    const now = new Date();
+    const result = await prisma.$transaction(async (tx) => {
+      const updateResult = await tx.milestoneReward.updateMany({
+        where: {
+          id: rewardId,
+          status: 'UNLOCKED',
+        },
+        data: {
+          status: 'REDEEMED',
+          redeemedAt: now,
+          redeemedByStaffId: operationalStaff?.id ?? null,
+        },
+      });
+
+      if (updateResult.count === 0) {
+        throw new AppError(
+          'Reward has already been redeemed or is no longer unlocked',
+          409
+        );
+      }
+
+      // Record real physical store visit for redemption
+      const redemptionVisit = await tx.visit.create({
+        data: {
+          loyaltyCycleId: reward.loyaltyCycleId,
+          visitRequestId: null,
+          branchId: reward.loyaltyCycle.program.branchId,
+          visitType: VisitType.REWARD_REDEMPTION,
+          visitNumberInCycle: null,
+          approvedByStaffId: operationalStaff!.id,
+          createdAt: now,
+        },
+      });
+
+      return {
         id: rewardId,
-        status: 'UNLOCKED',
-      },
-      data: {
         status: 'REDEEMED',
-        redeemedAt: new Date(),
-        redeemedByStaffId: operationalStaff?.id ?? null,
-      },
+        redeemedAt: now,
+        visitId: redemptionVisit.id,
+      };
     });
 
-    if (updateResult.count === 0) {
-      throw new AppError(
-        'Reward has already been redeemed or is no longer unlocked',
-        409
-      );
-    }
-
-    return {
-      id: rewardId,
-      status: 'REDEEMED',
-      redeemedAt: new Date(),
-    };
+    return result;
   }
 
   /**
@@ -644,41 +664,59 @@ export class StaffVisitService {
       operationalStaff = await this.resolveStaffRecord(user, reward.loyaltyCycle.program.branchId);
     }
 
-    // 2. Atomic conditional update: UNLOCKED -> REDEEMED
+    // 2. Atomic conditional update: UNLOCKED -> REDEEMED + Record physical store Visit
     const now = new Date();
-    const updateResult = await prisma.milestoneReward.updateMany({
-      where: {
-        redemptionTokenHash: tokenHash,
-        status: 'UNLOCKED',
-      },
-      data: {
-        status: 'REDEEMED',
-        redeemedAt: now,
-        redeemedByStaffId: operationalStaff?.id ?? null,
-      },
-    });
-
-    if (updateResult.count === 0) {
-      // Check current status to return accurate status code
-      const current = await prisma.milestoneReward.findUnique({
-        where: { redemptionTokenHash: tokenHash },
-        select: { status: true, redeemedAt: true },
+    const result = await prisma.$transaction(async (tx) => {
+      const updateResult = await tx.milestoneReward.updateMany({
+        where: {
+          redemptionTokenHash: tokenHash,
+          status: 'UNLOCKED',
+        },
+        data: {
+          status: 'REDEEMED',
+          redeemedAt: now,
+          redeemedByStaffId: operationalStaff?.id ?? null,
+        },
       });
 
-      if (current?.status === 'REDEEMED') {
-        throw new AppError('Reward has already been redeemed', 409);
-      }
-      throw new AppError('Reward is not available for redemption', 400);
-    }
+      if (updateResult.count === 0) {
+        // Check current status to return accurate status code
+        const current = await tx.milestoneReward.findUnique({
+          where: { redemptionTokenHash: tokenHash },
+          select: { status: true, redeemedAt: true },
+        });
 
-    return {
-      id: reward.id,
-      status: 'REDEEMED',
-      redeemedAt: now,
-      rewardName: reward.snapshotRewardName,
-      rewardType: reward.snapshotRewardType,
-      rewardValue: reward.snapshotRewardValue ? reward.snapshotRewardValue.toString() : null,
-    };
+        if (current?.status === 'REDEEMED') {
+          throw new AppError('Reward has already been redeemed', 409);
+        }
+        throw new AppError('Reward is not available for redemption', 400);
+      }
+
+      // Record real physical store visit for redemption
+      const redemptionVisit = await tx.visit.create({
+        data: {
+          loyaltyCycleId: reward.loyaltyCycleId,
+          visitRequestId: null,
+          branchId: reward.loyaltyCycle.program.branchId,
+          visitType: VisitType.REWARD_REDEMPTION,
+          visitNumberInCycle: null,
+          approvedByStaffId: operationalStaff!.id,
+          createdAt: now,
+        },
+      });
+
+      return {
+        id: reward.id,
+        status: 'REDEEMED',
+        redeemedAt: now,
+        rewardName: reward.snapshotRewardName,
+        rewardType: reward.snapshotRewardType,
+        rewardValue: reward.snapshotRewardValue ? reward.snapshotRewardValue.toString() : null,
+        visitId: redemptionVisit.id,
+      };
+    });
+
+    return result;
   }
 
   /**

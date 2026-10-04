@@ -50,6 +50,7 @@ export interface OwnerRegisterData {
     type?: string;
   };
   accessToken: string;
+  refreshToken?: string;
 }
 
 export interface LoginData {
@@ -60,6 +61,7 @@ export interface LoginData {
   };
   businessId: string;
   accessToken: string;
+  refreshToken?: string;
 }
 
 export interface VerifyOtpData {
@@ -69,8 +71,10 @@ export interface VerifyOtpData {
     name: string;
   };
   accessToken: string;
+  refreshToken?: string;
 }
 
 export interface RefreshData {
   accessToken: string;
+  refreshToken?: string;
 }

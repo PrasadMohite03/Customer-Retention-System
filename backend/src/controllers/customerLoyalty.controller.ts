@@ -74,3 +74,34 @@ export async function getCustomerHistoryHandler(
     next(error);
   }
 }
+
+export async function getCustomerExploreHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const customerId = req.customer?.customerId;
+    if (!customerId) {
+      throw new AppError('Unauthorized: Customer context missing', 401);
+    }
+
+    const { page, limit, category, search } = req.query;
+
+    const result = await CustomerLoyaltyService.getCustomerExplore(customerId, {
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      category: typeof category === 'string' ? category : undefined,
+      search: typeof search === 'string' ? search : undefined,
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+

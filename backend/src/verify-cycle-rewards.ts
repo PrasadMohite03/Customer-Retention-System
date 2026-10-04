@@ -245,26 +245,26 @@ async function runVerification() {
     }
     console.log('✓ Step 7 PASSED: Cycle 1 status is COMPLETED in DB');
 
-    // Step 8: Confirm customer current cycle becomes 0/5
-    if (statusData2.data.cycle.visitCount !== 0 || statusData2.data.cycle.cycleLength !== 5) {
-      throw new Error(`Step 8 FAILED: Expected customer current cycle to be 0/5, got ${statusData2.data.cycle.visitCount}/${statusData2.data.cycle.cycleLength}`);
+    // Step 8: Confirm customer completed cycle shows 5/5 and isCycleCompleted
+    if (statusData2.data.cycle.visitCount !== 5 || statusData2.data.cycle.cycleLength !== 5) {
+      throw new Error(`Step 8 FAILED: Expected customer cycle to show 5/5 completed stamps, got ${statusData2.data.cycle.visitCount}/${statusData2.data.cycle.cycleLength}`);
     }
-    console.log(`✓ Step 8 PASSED: Customer current cycle shows 0/5 stamps (Cycle #${statusData2.data.cycle.cycleNumber})`);
+    console.log(`✓ Step 8 PASSED: Customer pass shows 5/5 completed stamps (Cycle #${statusData2.data.cycle.cycleNumber})`);
 
-    // Step 6 & 9: Confirm reward from cycle 1 is visible and UNLOCKED
+    // Step 6 & 9: Confirm reward from cycle 1 is visible and UNLOCKED immediately
     const unlockedReward = statusData2.data.unlockedRewards.find((r: any) => r.rewardName === 'Head Massage');
     if (!unlockedReward || unlockedReward.status !== 'UNLOCKED') {
       throw new Error(`Step 6 & 9 FAILED: Reward not found in unlockedRewards! Found: ${JSON.stringify(statusData2.data.unlockedRewards)}`);
     }
     const rewardVoucherId = unlockedReward.id;
-    console.log(`✓ Step 6 & 9 PASSED: "Head Massage" reward is visible and status is UNLOCKED (earned in cycle ${unlockedReward.cycleNumber})`);
+    console.log(`✓ Step 6 & 9 PASSED: "Head Massage" reward is visible and status is UNLOCKED immediately (earned in cycle ${unlockedReward.cycleNumber})`);
 
-    // Verify milestone at visit 5 in current cycle 2 is LOCKED (not yet reached in cycle 2)
+    // Verify milestone at visit 5 is UNLOCKED
     const currentMilestone5 = statusData2.data.milestones.find((m: any) => m.visitNumber === 5);
-    if (currentMilestone5?.status !== 'LOCKED') {
-      throw new Error(`Expected current cycle milestone 5 to be LOCKED for 0/5, got ${currentMilestone5?.status}`);
+    if (currentMilestone5?.status !== 'UNLOCKED') {
+      throw new Error(`Expected completed cycle milestone 5 to be UNLOCKED for 5/5, got ${currentMilestone5?.status}`);
     }
-    console.log('✓ Check PASSED: Current cycle 2 milestone 5 is correctly LOCKED for upcoming progress');
+    console.log('✓ Check PASSED: Completed cycle 1 milestone 5 is correctly UNLOCKED');
 
     // ==========================================
     // STEP 15: Confirm owner/staff can fetch unlocked rewards without entering raw UUID

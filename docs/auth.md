@@ -120,7 +120,7 @@ To enforce the above rules, the backend will implement the following middleware:
 
 ---
 
-## 6. Expected API Endpoints (To Be Implemented)
+## 6. Implemented API Endpoints
 
 ### User Auth (Owner/Staff)
 - `POST /api/auth/login` - Authenticate via email/password

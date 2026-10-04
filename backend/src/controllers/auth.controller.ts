@@ -18,6 +18,7 @@ export async function registerOwnerHandler(
         user: result.user,
         business: result.business,
         accessToken: result.accessToken,
+        refreshToken: result.refreshTokenValue,
       },
     });
   } catch (error) {
@@ -41,6 +42,7 @@ export async function loginHandler(
         user: result.user,
         businessId: result.businessId,
         accessToken: result.accessToken,
+        refreshToken: result.refreshTokenValue,
       },
     });
   } catch (error) {
@@ -54,7 +56,10 @@ export async function refreshHandler(
   next: NextFunction
 ) {
   try {
-    const cookieValue = req.cookies?.[config.REFRESH_COOKIE_NAME];
+    const cookieValue =
+      req.cookies?.[config.REFRESH_COOKIE_NAME] ||
+      req.body?.refreshToken ||
+      (req.headers['x-refresh-token'] as string);
     const result = await AuthService.refresh(cookieValue);
 
     res.cookie(config.REFRESH_COOKIE_NAME, result.refreshTokenValue, getRefreshCookieOptions());
@@ -63,6 +68,7 @@ export async function refreshHandler(
       status: 'success',
       data: {
         accessToken: result.accessToken,
+        refreshToken: result.refreshTokenValue,
       },
     });
   } catch (error) {
@@ -78,7 +84,10 @@ export async function logoutHandler(
   next: NextFunction
 ) {
   try {
-    const cookieValue = req.cookies?.[config.REFRESH_COOKIE_NAME];
+    const cookieValue =
+      req.cookies?.[config.REFRESH_COOKIE_NAME] ||
+      req.body?.refreshToken ||
+      (req.headers['x-refresh-token'] as string);
     await AuthService.logout(cookieValue);
 
     res.clearCookie(config.REFRESH_COOKIE_NAME, getRefreshCookieOptions());

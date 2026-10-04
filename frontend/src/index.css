@@ -1,5 +1,18 @@
 @import "tailwindcss";
 
+@theme {
+  --color-brand-primary: #FFD444;
+  --color-brand-soft-yellow: #F4EB6C;
+  --color-brand-supporting-blue: #006199;
+  --color-brand-light-blue: #8ACFF8;
+  --color-brand-bg: #F8FAFC;
+  --color-brand-surface: #FFFFFF;
+  --color-brand-text: #172033;
+  --color-brand-secondary-text: #667085;
+  --color-brand-border: #E5E7EB;
+}
+
+
 
 @layer base {
   :root {
@@ -74,3 +87,13 @@
     color: hsl(var(--foreground));
   }
 }
+
+/* Hide scrollbars while preserving touch/wheel scrolling */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

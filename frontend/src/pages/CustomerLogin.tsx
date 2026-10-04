@@ -69,10 +69,10 @@ export const CustomerLogin: React.FC = () => {
       {/* Top Bar */}
       <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur-md px-6 sm:px-10 py-4 flex items-center justify-between relative z-10">
         <Link to="/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-sm">
-            <Sparkles className="w-4 h-4" />
+          <div className="w-8 h-8 rounded-lg bg-[#FFD444] flex items-center justify-center text-[#172033] shadow-xs">
+            <Sparkles className="w-4 h-4 stroke-[2.5]" />
           </div>
-          <span className="font-semibold text-lg tracking-tight text-slate-900">
+          <span className="font-bold text-lg tracking-tight text-slate-900">
             RetainPulse
           </span>
         </Link>
@@ -88,8 +88,8 @@ export const CustomerLogin: React.FC = () => {
       <main className="flex-1 flex items-center justify-center p-4 sm:p-6 relative z-10">
         <div className="w-full max-w-md bg-white border border-slate-200/90 rounded-2xl shadow-xs p-7 sm:p-8">
           <div className="text-center mb-7">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 mb-4 shadow-2xs">
-              <Phone className="w-5 h-5" />
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#FFD444]/20 border border-[#FFD444]/40 text-[#172033] mb-4 shadow-xs">
+              <Phone className="w-5 h-5 stroke-[2.2]" />
             </div>
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Customer Rewards</h1>
             <p className="text-sm text-slate-500 mt-1.5">
@@ -133,7 +133,7 @@ export const CustomerLogin: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-medium py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2 text-sm"
+                className="w-full bg-[#FFD444] hover:bg-[#F4EB6C] text-[#172033] font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-2 text-sm cursor-pointer active:scale-[0.98]"
               >
                 {isSubmitting ? (
                   <>
@@ -171,7 +171,7 @@ export const CustomerLogin: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-medium py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                className="w-full bg-[#FFD444] hover:bg-[#F4EB6C] text-[#172033] font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm cursor-pointer active:scale-[0.98]"
               >
                 {isSubmitting ? (
                   <>

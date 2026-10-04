@@ -86,6 +86,103 @@ export interface CustomerLoyaltyData {
   } | null;
 }
 
+export interface CustomerHistoryCycleReward {
+  id: string;
+  rewardType: string;
+  rewardName?: string | null;
+  rewardValue?: string | null;
+  status: 'UNLOCKED' | 'REDEEMED';
+  unlockedAt: string;
+  redeemedAt?: string | null;
+  redemptionToken?: string | null;
+}
+
+export interface CustomerHistoryCycleVisit {
+  id: string;
+  visitType?: 'QUALIFYING' | 'REWARD_REDEMPTION';
+  visitNumberInCycle?: number | null;
+  branchName: string;
+  createdAt: string;
+}
+
+export interface CustomerHistoryCycle {
+  id: string;
+  cycleNumber: number;
+  status: string;
+  visitCount: number;
+  cycleLength: number;
+  programName: string;
+  qrToken?: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  visits: CustomerHistoryCycleVisit[];
+  rewards: CustomerHistoryCycleReward[];
+}
+
+export interface CustomerHistoryItem {
+  business: {
+    id: string;
+    name: string;
+    type?: string | null;
+    branches?: Array<{
+      id: string;
+      name: string;
+      address?: string | null;
+      qrToken: string;
+    }>;
+  };
+  cycles: CustomerHistoryCycle[];
+}
+
+export interface ExploreBusinessItem {
+  id: string;
+  name: string;
+  type: string | null;
+  branch: {
+    id: string;
+    name: string;
+    address?: string | null;
+    qrToken: string;
+  } | null;
+  program: {
+    id: string;
+    name: string;
+    description?: string | null;
+    cycleLength: number;
+    milestones: Array<{
+      id: string;
+      visitNumber: number;
+      rewardType: string;
+      rewardName?: string | null;
+      rewardDescription?: string | null;
+      rewardValue?: string | null;
+    }>;
+  } | null;
+  isEnrolled: boolean;
+  currentVisitCount: number;
+}
+
+export interface ExplorePagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
+export interface ExploreResponse {
+  items: ExploreBusinessItem[];
+  pagination: ExplorePagination;
+}
+
+export interface ExploreQueryParams {
+  page?: number;
+  limit?: number;
+  category?: string;
+  search?: string;
+}
+
 export const customerService = {
   /**
    * Resolves public QR token info (does not require auth).
@@ -127,8 +224,37 @@ export const customerService = {
   /**
    * Retrieves past history and cycles.
    */
-  async getCustomerHistory(): Promise<any[]> {
-    const res = await api.get<ApiResponse<any[]>>('/customer/history');
+  async getCustomerHistory(): Promise<CustomerHistoryItem[]> {
+    const res = await api.get<ApiResponse<CustomerHistoryItem[]>>('/customer/history');
     return res.data.data ?? [];
   },
+
+  /**
+   * Retrieves active participating businesses for exploration with server-side pagination, category, and search.
+   */
+  async getExploreBusinesses(params?: ExploreQueryParams): Promise<ExploreResponse> {
+    const res = await api.get<ApiResponse<ExploreResponse>>('/customer/explore', {
+      params: {
+        page: params?.page ?? 1,
+        limit: params?.limit ?? 12,
+        category: params?.category && params.category !== 'ALL' ? params.category : undefined,
+        search: params?.search?.trim() ? params.search.trim() : undefined,
+      },
+    });
+    return (
+      res.data.data ?? {
+        items: [],
+        pagination: {
+          page: 1,
+          limit: 12,
+          total: 0,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      }
+    );
+  },
 };
+
+

@@ -8,8 +8,6 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ) => {
-  console.error(err);
-
   if (err instanceof ZodError) {
     const issues = err.issues || (err as any).errors || [];
     return res.status(400).json({
@@ -20,6 +18,11 @@ export const errorHandler = (
   }
 
   if (err instanceof AppError) {
+    if (err.statusCode < 500) {
+      console.warn(`[AppError ${err.statusCode}] ${err.message}`);
+    } else {
+      console.error(err);
+    }
     return res.status(err.statusCode).json({
       status: 'error',
       message: err.message,
@@ -27,6 +30,7 @@ export const errorHandler = (
   }
 
   // Fallback for unhandled errors
+  console.error(err);
   return res.status(500).json({
     status: 'error',
     message: 'Internal server error',

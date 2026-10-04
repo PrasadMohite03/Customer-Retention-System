@@ -4,12 +4,16 @@ import {
   getLoyaltyStatusHandler,
   createVisitRequestHandler,
   getCustomerHistoryHandler,
+  getCustomerExploreHandler,
 } from '../controllers/customerLoyalty.controller';
 
 const router = Router();
 
 // Strictly authenticate customer via phone/OTP JWT
 router.use(authenticateCustomer);
+
+// Read-only explore / participating businesses directory
+router.get('/explore', getCustomerExploreHandler);
 
 // Read-only loyalty status (idempotently ensures CustomerProfile, never creates empty cycle)
 router.get('/loyalty/:qrToken', getLoyaltyStatusHandler);

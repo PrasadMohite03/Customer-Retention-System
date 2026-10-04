@@ -1,4 +1,9 @@
-import api, { refreshAccessToken, setSessionType } from './api';
+import api, {
+  refreshAccessToken,
+  setSessionType,
+  setFallbackRefreshToken,
+  getFallbackRefreshToken,
+} from './api';
 import type {
   LoginRequest,
   RegisterOwnerRequest,
@@ -18,6 +23,9 @@ export const authService = {
       throw new Error(response.data.message || 'Registration failed');
     }
     setSessionType('USER');
+    if (response.data.data.refreshToken) {
+      setFallbackRefreshToken(response.data.data.refreshToken);
+    }
     return response.data.data;
   },
 
@@ -27,6 +35,9 @@ export const authService = {
       throw new Error(response.data.message || 'Login failed');
     }
     setSessionType('USER');
+    if (response.data.data.refreshToken) {
+      setFallbackRefreshToken(response.data.data.refreshToken);
+    }
     return response.data.data;
   },
 
@@ -41,6 +52,9 @@ export const authService = {
       throw new Error(response.data.message || 'OTP verification failed');
     }
     setSessionType('CUSTOMER');
+    if (response.data.data.refreshToken) {
+      setFallbackRefreshToken(response.data.data.refreshToken);
+    }
     return response.data.data;
   },
 
@@ -56,17 +70,21 @@ export const authService = {
 
   async logoutUser(): Promise<void> {
     try {
-      await api.post('/auth/logout');
+      const fallbackToken = getFallbackRefreshToken();
+      await api.post('/auth/logout', fallbackToken ? { refreshToken: fallbackToken } : {});
     } finally {
       setSessionType(null);
+      setFallbackRefreshToken(null);
     }
   },
 
   async logoutCustomer(): Promise<void> {
     try {
-      await api.post('/auth/customer/logout');
+      const fallbackToken = getFallbackRefreshToken();
+      await api.post('/auth/customer/logout', fallbackToken ? { refreshToken: fallbackToken } : {});
     } finally {
       setSessionType(null);
+      setFallbackRefreshToken(null);
     }
   },
 };

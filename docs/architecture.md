@@ -288,8 +288,9 @@ LoyaltyCycle
 Visit
   ├── belongs to LoyaltyCycle
   ├── belongs to Branch
-  ├── created from an approved VisitRequest
-  └── records the visit number within this cycle (1, 2, 3, …)
+  ├── has a visitType (QUALIFYING | REWARD_REDEMPTION)
+  ├── for QUALIFYING: created from an approved VisitRequest, records visitNumberInCycle (1, 2, 3, …)
+  └── for REWARD_REDEMPTION: created atomically on reward redemption, visitRequestId is null, visitNumberInCycle is null
 
 VisitRequest
   ├── belongs to CustomerProfile
@@ -311,7 +312,7 @@ MilestoneReward
 - Programs can be deactivated and later **reactivated**. Reactivation preserves the same program ID, all existing milestones, and all historical `LoyaltyCycle` relationships — no new record is created.
 - **`LoyaltyCycle`** is the customer's active run through a program. When `visitCount === program.cycleLength`, the cycle is marked `COMPLETED` and a new one begins.
 - **`Milestone`** is a reward checkpoint within the cycle. Milestones with `rewardType: NONE` are tracked for progress but do **not** create a `MilestoneReward` record.
-- **`Visit`** is a confirmed, approved interaction. A `VisitRequest` is the pending state before staff approval.
+- **`Visit`** is a confirmed customer store visit. Every real physical customer store visit is represented by a `Visit` record. `VisitType` distinguishes loyalty-qualifying visits (`QUALIFYING`) from reward-redemption visits (`REWARD_REDEMPTION`). Only `QUALIFYING` visits increment `LoyaltyCycle.visitCount`. `REWARD_REDEMPTION` visits are recorded for analytics but do not affect loyalty progress.
 - **`MilestoneReward`** is the per-customer, per-cycle record of a reward unlock. Only created for milestones with a non-`NONE` reward type.
 
 ---
@@ -324,17 +325,29 @@ The loyalty system is **cycle-based**. A business defines a `LoyaltyProgram` wit
 
 ### Cycle Rules (authoritative)
 
-1. Each approved visit increments the current cycle's `visitCount` by 1.
-2. After every visit, the backend evaluates all enabled milestones for the program.
+1. Each approved **qualifying** visit increments the current cycle's `visitCount` by 1. Reward redemption visits do not increment loyalty progress.
+2. After every qualifying visit, the backend evaluates all enabled milestones for the program.
 3. If the new `visitCount` matches a milestone's `visitNumber`:
    - If `rewardType` is `NONE`: the milestone is noted for progress tracking. **No `MilestoneReward` record is created.**
-   - If `rewardType` is anything other than `NONE`: a `MilestoneReward` record is created with status `UNLOCKED`.
+   - If `rewardType` is anything other than `NONE`: a `MilestoneReward` record is created immediately with status `UNLOCKED` and a cryptographic redemption token is generated.
 4. Unlocking or redeeming an intermediate milestone reward does **not** reset or end the cycle.
 5. Disabling a milestone or changing its reward type does **not** change `cycleLength`.
 6. The cycle is **complete** when `visitCount === loyaltyProgram.cycleLength`. Cycle completion is determined by `cycleLength`, **not** by the highest enabled milestone's `visitNumber`.
-7. On cycle completion, the current `LoyaltyCycle` is marked `COMPLETED` and a new `LoyaltyCycle` is created (same `customerProfileId` + `programId`, `cycleNumber` incremented, `visitCount` reset to 0).
-8. Milestones with non-`NONE` rewards become available again in each new cycle.
-9. History of past cycles, visits, and milestone rewards is preserved and never deleted.
+7. On cycle completion, the current `LoyaltyCycle` is marked `COMPLETED`. An empty Cycle N+1 is **not** created immediately; it is created lazily on the customer's next actual approved qualifying visit with `cycleNumber = N + 1` and `visitCount = 1`.
+8. **Decoupled Reward Lifecycle & Physical Store Visits:** Milestone rewards are unlocked immediately when the qualifying approved visit reaches the milestone. Reward redemption is a separate transaction: it does NOT require a `VisitRequest`, does NOT increment `LoyaltyCycle.visitCount`, and does NOT start a new cycle. However, because reward redemption is a real physical customer store visit, it creates a `Visit` record (`visitType = REWARD_REDEMPTION`, `visitRequestId = null`, `visitNumberInCycle = null`) for accurate business and customer analytics.
+9. Milestones with non-`NONE` rewards become available again in each new cycle.
+10. History of past cycles, visits, and milestone rewards is preserved and never deleted.
+
+### Customer Loyalty UI Visual Presentation (5-Slot Punch Card Model)
+
+To deliver an intuitive and rewarding punch card experience, the customer-facing frontend separates visual presentation from backend cycle counting:
+
+- **Backend `cycleLength = 4`**: Exactly 4 qualifying visits unlock the terminal reward and complete the cycle.
+- **Frontend Card (`totalVisualSlots = 5`)**: The UI renders `cycleLength + 1` slots:
+  - 4 qualifying stamp slots + 1 reward redemption slot.
+  - Before redemption (at 4 qualifying visits): displays `4 of 5` with 4 green checks and the 5th slot showing an active/unlocked reward (`[🎁] Reward`).
+  - After redemption: displays `5 of 5` with 5 green checks (`[✓] [✓] [✓] [✓] [✓]`) indicating full cycle fulfillment.
+  - The 5th slot represents the reward redemption state and NEVER increments backend `LoyaltyCycle.visitCount`. Backend counting remains strictly bound to `cycleLength`.
 
 ### Example
 
@@ -348,27 +361,46 @@ Milestones (enabled):
   visitNumber: 7 → rewardType: PERCENT_DISCOUNT (50%)   ← reward at cycle end
 
 Cycle 1 progression:
-  Visit 1 → visitCount = 1
+  Visit 1 → visitCount = 1, visitType = QUALIFYING
            milestone at visitNumber 1 matched → rewardType: NONE
            → no MilestoneReward created
            visitCount (1) ≠ cycleLength (7) → cycle continues
 
-  Visit 2 → visitCount = 2 → no milestone match → cycle continues
-  Visit 3 → visitCount = 3 → no milestone match → cycle continues
-  Visit 4 → visitCount = 4 → no milestone match → cycle continues
+  Visit 2 → visitCount = 2, visitType = QUALIFYING → no milestone match → cycle continues
+  Visit 3 → visitCount = 3, visitType = QUALIFYING → no milestone match → cycle continues
+  Visit 4 → visitCount = 4, visitType = QUALIFYING → no milestone match → cycle continues
 
-  Visit 5 → visitCount = 5
+  Visit 5 → visitCount = 5, visitType = QUALIFYING
            milestone at visitNumber 5 matched → rewardType: PERCENT_DISCOUNT
            → MilestoneReward created (25% OFF, status: UNLOCKED)
            visitCount (5) ≠ cycleLength (7) → cycle continues
 
-  Visit 6 → visitCount = 6 → no milestone match → cycle continues
+  Visit 6 → visitCount = 6, visitType = QUALIFYING → no milestone match → cycle continues
 
-  Visit 7 → visitCount = 7
+  Visit 7 → visitCount = 7, visitType = QUALIFYING
            milestone at visitNumber 7 matched → rewardType: PERCENT_DISCOUNT
            → MilestoneReward created (50% OFF, status: UNLOCKED)
            visitCount (7) === cycleLength (7) → Cycle 1 COMPLETED
-           New Cycle 2 created (cycleNumber: 2, visitCount: 0)
+           Customer immediately sees reward unlocked and can show Reward QR.
+           No VisitRequest is needed to redeem.
+
+Customer physical redemption visit:
+  Reward Redemption Visit:
+           Customer shows Reward QR → Staff validates & confirms redemption.
+           Atomically: MilestoneReward becomes REDEEMED and a Visit is created:
+           visitType = REWARD_REDEMPTION, visitRequestId = null, visitNumberInCycle = null.
+           LoyaltyCycle.visitCount remains 7 (does NOT increment).
+           LoyaltyCycle remains COMPLETED.
+
+Customer subsequent physical visit:
+  Visit 8 (overall store visit) / Visit 1 (Cycle 2):
+           Customer requests stamp via QR → Staff approves.
+           Cycle 2 created lazily: cycleNumber = 2, visitCount = 1, visitType = QUALIFYING.
+
+Analytics Summary:
+  Total Store Visits: 9 (7 qualifying + 1 reward redemption + 1 qualifying)
+  Qualifying Visits: 8
+  Reward Redemption Visits: 1
 ```
 
 ### Backend Milestone Evaluation Logic
@@ -386,11 +418,11 @@ After a visit is approved and the `Visit` record is created:
           → Do NOT create a MilestoneReward record.
      b. If milestone.rewardType !== NONE:
           → Create MilestoneReward (status: UNLOCKED, milestoneId, loyaltyCycleId, unlockedAt: now).
+          → Generate redemption token, store only SHA-256 hash.
 6. Check cycle completion:
      If currentVisitCount === loyaltyProgram.cycleLength:
           → Mark LoyaltyCycle.status = COMPLETED, completedAt = now
-          → Create a new LoyaltyCycle (same customerProfileId + programId,
-            cycleNumber + 1, visitCount = 0, status = ACTIVE)
+          → (Cycle N+1 is created lazily on next approved visit, NOT here)
 ```
 
 All of steps 1–6 execute within a single database transaction immediately after the visit is recorded. The client never triggers milestone evaluation directly.
@@ -525,8 +557,9 @@ Note: milestones with `rewardType: NONE` have no reward state. They are not repr
   - Staff or Owner taps **[ Scan Reward ]** on their dashboard, scanning via camera or typing the code manually.
 - **Validation & Redemption:**
   - Read-only validation (`POST /api/staff/rewards/validate`) verifies token hash, branch scope, active status, and returns masked customer and snapshot reward info without mutating state.
-  - Redemption (`POST /api/staff/rewards/redeem-by-token`) atomically executes conditional update `status: UNLOCKED -> REDEEMED`.
-  - Concurrent attempts fail with `409 Conflict`.
+  - Redemption (`POST /api/staff/rewards/redeem-by-token`) atomically executes conditional update `status: UNLOCKED -> REDEEMED` AND creates a `Visit` record (`visitType = REWARD_REDEMPTION`, `visitRequestId = null`, `visitNumberInCycle = null`, `approvedByStaffId = staff.id`).
+  - Does NOT increment `LoyaltyCycle.visitCount` and does NOT start a new cycle.
+  - Concurrent attempts fail with `409 Conflict` (and no duplicate Visit is created).
 - **Operational Actor Recording:**
   - Staff redemptions record the authenticated staff member's `Staff.id` in `redeemedByStaffId`.
   - Owner redemptions resolve/ensure an operational `Staff` record linked to the Owner User via `resolveStaffRecord()`, preserving foreign key integrity without altering schema constraints.
@@ -870,13 +903,15 @@ For all program and milestone operations, the backend verifies that the resource
 
 ---
 
-### Customers (`/api/customers`)
+### Customers (`/api/customers` & `/api/customer`)
 
-| Responsibility | Auth Required | Role |
-|---|---|---|
-| List customers for own business | Yes | OWNER |
-| Get a specific customer profile (business-scoped) | Yes | OWNER |
-| Get own loyalty status at a business | Yes | CUSTOMER |
+| Responsibility | Auth Required | Role | Notes |
+|---|---|---|---|
+| List customers for own business | Yes | OWNER | Scoped to owner's business |
+| Get a specific customer profile | Yes | OWNER | Business-scoped |
+| Get own loyalty status at a branch | Yes | CUSTOMER | Read-only; resolves by branch `qrToken` |
+| Explore participating businesses | Yes | CUSTOMER | `GET /api/customer/explore` with real DB search, category filter, pagination |
+| View own loyalty history | Yes | CUSTOMER | `GET /api/customer/history` cross-business activity |
 
 Customers can only access their own data. Owners can only access their business's customers.
 
@@ -893,7 +928,7 @@ Customers can only access their own data. Owners can only access their business'
 
 On creation, `customerId` is resolved from the JWT. `branchId` is resolved from the QR token context, never from the request body.
 
-On approval, the backend runs the full visit creation and milestone evaluation pipeline within a single transaction.
+On approval, the backend runs the full qualifying visit creation and milestone evaluation pipeline within a single transaction.
 
 ---
 
@@ -905,17 +940,22 @@ On approval, the backend runs the full visit creation and milestone evaluation p
 | List visits for a specific customer profile | Yes | OWNER |
 | Get own visit history at a business | Yes | CUSTOMER |
 
-Visits are created only by the system as a result of visit request approval — never directly by a client.
+Visits are created exclusively by the system:
+1. **Qualifying Visit:** Created upon `VisitRequest` approval (`visitType = QUALIFYING`, `visitRequestId = request.id`, `visitNumberInCycle = newVisitCount`). Increments `LoyaltyCycle.visitCount`.
+2. **Reward Redemption Visit:** Created upon `MilestoneReward` redemption confirmation (`visitType = REWARD_REDEMPTION`, `visitRequestId = null`, `visitNumberInCycle = null`). Does NOT increment `LoyaltyCycle.visitCount`.
 
 ---
 
-### Rewards (`/api/rewards`)
+### Rewards (`/api/staff/rewards` & `/api/rewards`)
 
 | Responsibility | Auth Required | Role |
 |---|---|---|
 | List unlocked rewards for a customer profile | Yes | OWNER, STAFF, CUSTOMER (own only) |
-| Mark a reward as redeemed | Yes | OWNER, STAFF |
+| Validate reward token (read-only) | Yes | OWNER, STAFF (`POST /api/staff/rewards/validate`) |
+| Redeem reward by token (atomic mutation) | Yes | OWNER, STAFF (`POST /api/staff/rewards/redeem-by-token`) |
 | Get reward redemption history | Yes | OWNER |
+
+Redemption is branch- and business-isolated. Raw redemption tokens (`RP-XXXX-XXXX-XXXX`) are never stored in the database; only SHA-256 hashes are persisted and indexed.
 
 ---
 
@@ -927,7 +967,12 @@ Visits are created only by the system as a result of visit request approval — 
 | Get customer list with basic stats | Yes | OWNER |
 | Get recent activity feed | Yes | OWNER |
 
-Analytics endpoints aggregate data server-side and return pre-computed summaries. No raw database access is exposed to the client.
+Analytics queries leverage the unified `Visit` table and `visitType` enum:
+- **Total Physical Footfall:** Count of all `Visit` records across locations.
+- **Qualifying Visits:** Filtered by `visitType = QUALIFYING`.
+- **Reward Redemption Visits:** Filtered by `visitType = REWARD_REDEMPTION`.
+- **Customer Reach:** Count of distinct customer IDs across visits.
+- **Multi-Branch & Temporal Comparisons:** Grouping visits by `branchId` and truncating `createdAt` across daily/weekly/monthly periods.
 
 ---
 

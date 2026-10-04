@@ -33,6 +33,7 @@ export async function verifyOtpHandler(
       data: {
         customer: result.customer,
         accessToken: result.accessToken,
+        refreshToken: result.refreshTokenValue,
       },
     });
   } catch (error) {
@@ -46,7 +47,10 @@ export async function refreshCustomerHandler(
   next: NextFunction
 ) {
   try {
-    const cookieValue = req.cookies?.[config.REFRESH_COOKIE_NAME];
+    const cookieValue =
+      req.cookies?.[config.REFRESH_COOKIE_NAME] ||
+      req.body?.refreshToken ||
+      (req.headers['x-refresh-token'] as string);
     const result = await CustomerAuthService.refreshCustomer(cookieValue);
 
     res.cookie(config.REFRESH_COOKIE_NAME, result.refreshTokenValue, getRefreshCookieOptions());
@@ -55,6 +59,7 @@ export async function refreshCustomerHandler(
       status: 'success',
       data: {
         accessToken: result.accessToken,
+        refreshToken: result.refreshTokenValue,
       },
     });
   } catch (error) {
@@ -69,7 +74,10 @@ export async function logoutCustomerHandler(
   next: NextFunction
 ) {
   try {
-    const cookieValue = req.cookies?.[config.REFRESH_COOKIE_NAME];
+    const cookieValue =
+      req.cookies?.[config.REFRESH_COOKIE_NAME] ||
+      req.body?.refreshToken ||
+      (req.headers['x-refresh-token'] as string);
     await CustomerAuthService.logoutCustomer(cookieValue);
 
     res.clearCookie(config.REFRESH_COOKIE_NAME, getRefreshCookieOptions());
