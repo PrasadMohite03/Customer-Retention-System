@@ -1,6 +1,10 @@
 import prisma from '../lib/prisma';
 import { AppError } from '../utils/errors';
-import { deriveRedemptionTokenForReward } from '../utils/redemptionToken';
+import {
+  deriveRedemptionTokenForReward,
+  generateRewardClaimToken,
+  hashRewardClaimToken,
+} from '../utils/redemptionToken';
 
 export class CustomerLoyaltyService {
   /**
@@ -40,6 +44,7 @@ export class CustomerLoyaltyService {
         business: true,
         loyaltyPrograms: {
           where: { isActive: true },
+          orderBy: { createdAt: 'desc' },
           include: {
             milestones: {
               where: { isEnabled: true },
@@ -343,6 +348,126 @@ export class CustomerLoyaltyService {
   }
 
   /**
+   * Customer initiates a Reward Claim Visit for the next qualifying visit that has an attached reward.
+   * Does NOT create a VisitRequest.
+   * Generates a short-lived single-use opaque token, hashes it for storage, and returns raw token to customer.
+   */
+  static async createRewardClaim(customerId: string, qrToken: string) {
+    if (!qrToken || typeof qrToken !== 'string') {
+      throw new AppError('QR token is required', 400);
+    }
+
+    const branch = await prisma.branch.findUnique({
+      where: { qrToken: qrToken.trim() },
+      include: {
+        business: true,
+        loyaltyPrograms: {
+          where: { isActive: true },
+          include: {
+            milestones: {
+              where: { isEnabled: true },
+              orderBy: { visitNumber: 'asc' },
+            },
+          },
+        },
+      },
+    });
+
+    if (!branch) {
+      throw new AppError('Invalid or expired QR code', 404);
+    }
+
+    if (!branch.isActive) {
+      throw new AppError('This branch location is currently inactive', 400);
+    }
+
+    const activeProgram = branch.loyaltyPrograms[0];
+    if (!activeProgram) {
+      throw new AppError('No active loyalty program is configured for this branch', 422);
+    }
+
+    // Resolve or create CustomerProfile for this customer & business
+    const customerProfile = await this.resolveCustomerProfile(customerId, branch.businessId);
+
+    // Read active LoyaltyCycle
+    const activeCycle = await prisma.loyaltyCycle.findFirst({
+      where: {
+        customerProfileId: customerProfile.id,
+        programId: activeProgram.id,
+        status: 'ACTIVE',
+      },
+      include: {
+        milestoneRewards: true,
+      },
+    });
+
+    const currentVisitCount = activeCycle ? activeCycle.visitCount : 0;
+    const expectedVisitNumber = currentVisitCount + 1;
+
+    // Check if expectedVisitNumber matches a configured reward milestone
+    const milestone = activeProgram.milestones.find((m) => m.visitNumber === expectedVisitNumber);
+    if (!milestone || milestone.rewardType === 'NONE') {
+      throw new AppError('The next qualifying visit does not have an attached reward milestone', 400);
+    }
+
+    // Check if reward for this milestone in this cycle already exists
+    if (activeCycle && activeCycle.milestoneRewards.some((r) => r.milestoneId === milestone.id)) {
+      throw new AppError('Reward for this milestone has already been claimed', 409);
+    }
+
+    // Expire any existing pending claims for this customerProfile and branch
+    await prisma.rewardClaim.updateMany({
+      where: {
+        customerProfileId: customerProfile.id,
+        branchId: branch.id,
+        status: 'PENDING',
+      },
+      data: {
+        status: 'EXPIRED',
+      },
+    });
+
+    const rawToken = generateRewardClaimToken();
+    const tokenHash = hashRewardClaimToken(rawToken);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    const claim = await prisma.rewardClaim.create({
+      data: {
+        customerProfileId: customerProfile.id,
+        loyaltyCycleId: activeCycle ? activeCycle.id : null,
+        programId: activeProgram.id,
+        branchId: branch.id,
+        milestoneId: milestone.id,
+        expectedVisitNumber,
+        tokenHash,
+        status: 'PENDING',
+        expiresAt,
+      },
+    });
+
+    return {
+      claimId: claim.id,
+      claimToken: rawToken,
+      expiresAt: claim.expiresAt,
+      expectedVisitNumber,
+      cycleLength: activeProgram.cycleLength,
+      reward: {
+        id: milestone.id,
+        name: milestone.rewardName || milestone.rewardType.replace(/_/g, ' '),
+        description: milestone.rewardDescription,
+        type: milestone.rewardType,
+        value: milestone.rewardValue ? milestone.rewardValue.toString() : null,
+      },
+      business: {
+        name: branch.business.name,
+      },
+      branch: {
+        name: branch.name,
+      },
+    };
+  }
+
+  /**
    * Retrieve customer's loyalty history across businesses / programs.
    */
   static async getCustomerHistory(customerId: string) {
@@ -353,14 +478,37 @@ export class CustomerLoyaltyService {
           include: {
             branches: {
               where: { isActive: true },
-              select: { id: true, name: true, address: true, qrToken: true },
+              select: {
+                id: true,
+                name: true,
+                address: true,
+                qrToken: true,
+                loyaltyPrograms: {
+                  where: { isActive: true },
+                  orderBy: { createdAt: 'desc' },
+                  take: 1,
+                  include: {
+                    milestones: {
+                      where: { isEnabled: true },
+                      orderBy: { visitNumber: 'asc' },
+                    },
+                  },
+                },
+              },
             },
           },
         },
         loyaltyCycles: {
           orderBy: { startedAt: 'desc' },
           include: {
-            program: true,
+            program: {
+              include: {
+                milestones: {
+                  where: { isEnabled: true },
+                  orderBy: { visitNumber: 'asc' },
+                },
+              },
+            },
             visits: {
               orderBy: { createdAt: 'desc' },
               include: { branch: true },
@@ -378,7 +526,27 @@ export class CustomerLoyaltyService {
         id: p.business.id,
         name: p.business.name,
         type: (p.business as any).type || null,
-        branches: p.business.branches,
+        branches: p.business.branches.map((br) => ({
+          id: br.id,
+          name: br.name,
+          address: br.address,
+          qrToken: br.qrToken,
+          program: br.loyaltyPrograms[0]
+            ? {
+                id: br.loyaltyPrograms[0].id,
+                name: br.loyaltyPrograms[0].name,
+                cycleLength: br.loyaltyPrograms[0].cycleLength,
+                milestones: br.loyaltyPrograms[0].milestones.map((m) => ({
+                  id: m.id,
+                  visitNumber: m.visitNumber,
+                  rewardType: m.rewardType,
+                  rewardName: m.rewardName,
+                  rewardDescription: m.rewardDescription,
+                  rewardValue: m.rewardValue ? m.rewardValue.toString() : null,
+                })),
+              }
+            : null,
+        })),
       },
       cycles: p.loyaltyCycles.map((c) => ({
         id: c.id,
@@ -390,6 +558,14 @@ export class CustomerLoyaltyService {
         qrToken: p.business.branches[0]?.qrToken || c.visits[0]?.branch?.qrToken || null,
         startedAt: c.startedAt,
         completedAt: c.completedAt,
+        milestones: c.program.milestones.map((m) => ({
+          id: m.id,
+          visitNumber: m.visitNumber,
+          rewardType: m.rewardType,
+          rewardName: m.rewardName,
+          rewardDescription: m.rewardDescription,
+          rewardValue: m.rewardValue ? m.rewardValue.toString() : null,
+        })),
         visits: c.visits.map((v) => ({
           id: v.id,
           visitType: v.visitType,
@@ -599,9 +775,11 @@ export class CustomerLoyaltyService {
               isActive: true,
               loyaltyPrograms: { some: { isActive: true } },
             },
+            orderBy: { createdAt: 'asc' },
             include: {
               loyaltyPrograms: {
                 where: { isActive: true },
+                orderBy: { createdAt: 'desc' },
                 include: {
                   milestones: {
                     where: { isEnabled: true },

@@ -99,15 +99,15 @@ export const CustomerProfile: React.FC = () => {
           <span className="text-[10px] text-[#667085]">Collected</span>
         </div>
 
-        {/* Rewards stat uses Supporting Blue */}
+        {/* Rewards stat uses AAO Green */}
         <div className="bg-[#FFFFFF] p-3.5 rounded-2xl border border-[#E5E7EB] text-center shadow-xs">
           <span className="text-[10px] uppercase font-bold text-[#667085] block tracking-wider">
             Rewards
           </span>
-          <span className="text-xl font-black text-[#006199] mt-0.5 block">
+          <span className="text-xl font-black text-[#0E7A36] mt-0.5 block">
             {stats.rewardsUnlocked}
           </span>
-          <span className="text-[10px] text-[#006199] font-medium">Unlocked</span>
+          <span className="text-[10px] text-[#0E7A36] font-extrabold">Unlocked</span>
         </div>
 
         <div className="bg-[#FFFFFF] p-3.5 rounded-2xl border border-[#E5E7EB] text-center shadow-xs">
@@ -128,7 +128,7 @@ export const CustomerProfile: React.FC = () => {
           className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors cursor-pointer"
         >
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#FFD444]/20 text-[#172033] flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-[#FFD444]/25 text-[#172033] flex items-center justify-center">
               <Compass className="w-4 h-4 stroke-[2.2]" />
             </div>
             <div>
@@ -144,7 +144,7 @@ export const CustomerProfile: React.FC = () => {
           className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors cursor-pointer"
         >
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#006199]/10 text-[#006199] flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-[#EAFBEF] text-[#16A34A] flex items-center justify-center border border-[#55E07E]/30">
               <Gift className="w-4 h-4" />
             </div>
             <div>

@@ -8,7 +8,6 @@ import {
   LogOut,
   CheckCircle2,
   Clock,
-  Sparkles,
   Phone,
   RefreshCw,
   AlertCircle,
@@ -20,6 +19,7 @@ import {
   QrCode,
 } from 'lucide-react';
 import { RewardScannerModal } from '../../components/RewardScannerModal';
+import { AaoLogo } from '../../components/ui/AaoBrand';
 
 interface RecentAction {
   id: string;
@@ -136,12 +136,13 @@ export const StaffDashboard: React.FC = () => {
       {/* Top Header */}
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur-md px-6 sm:px-10 py-3.5 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-2xs">
-            <Sparkles className="w-4 h-4" />
-          </div>
+          <AaoLogo variant="icon" size="sm" />
           <div>
-            <h1 className="font-bold text-sm text-slate-900 leading-tight">Staff Portal & Queue</h1>
-            <p className="text-xs text-slate-500">Live Branch Operations</p>
+            <h1 className="font-black text-sm text-[#172033] leading-tight flex items-center gap-1.5">
+              <span>AAO</span>
+              <span className="text-xs font-semibold text-[#667085]">• Staff Portal & Queue</span>
+            </h1>
+            <p className="text-xs text-[#667085]">Live Branch Operations</p>
           </div>
         </div>
 

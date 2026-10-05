@@ -10,6 +10,8 @@ import {
   getDashboardHandler,
   validateRewardTokenHandler,
   redeemRewardByTokenHandler,
+  validateRewardClaimTokenHandler,
+  confirmRewardClaimHandler,
 } from '../controllers/staffVisit.controller';
 import {
   createStaffHandler,
@@ -33,6 +35,10 @@ router.get('/rewards/unlocked', requireRole([UserRole.STAFF, UserRole.OWNER]), g
 router.post('/rewards/validate', requireRole([UserRole.STAFF, UserRole.OWNER]), validateRewardTokenHandler);
 router.post('/rewards/redeem-by-token', requireRole([UserRole.STAFF, UserRole.OWNER]), redeemRewardByTokenHandler);
 router.post('/rewards/:rewardId/redeem', requireRole([UserRole.STAFF, UserRole.OWNER]), redeemRewardHandler);
+
+// ─── Reward Claim Visit Routes (Atomic Claim + Redeem) ─────────────────────
+router.post('/reward-claims/validate', requireRole([UserRole.STAFF, UserRole.OWNER]), validateRewardClaimTokenHandler);
+router.post('/reward-claims/confirm', requireRole([UserRole.STAFF, UserRole.OWNER]), confirmRewardClaimHandler);
 
 // ─── Staff Management CRUD Routes (OWNER only) ─────────────────────────────
 router.post('/', requireRole([UserRole.OWNER]), createStaffHandler);

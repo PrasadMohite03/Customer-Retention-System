@@ -85,6 +85,7 @@ model Branch {
   loyaltyPrograms LoyaltyProgram[] @relation("BranchLoyaltyPrograms")
   visitRequests   VisitRequest[]   @relation("BranchVisitRequests")
   visits          Visit[]          @relation("BranchVisits")
+  rewardClaims    RewardClaim[]    @relation("BranchRewardClaims")
 
   @@index([businessId])
 }
@@ -104,6 +105,7 @@ model Staff {
   resolvedRequests VisitRequest[]    @relation("StaffResolvedRequests")
   approvedVisits   Visit[]           @relation("StaffApprovedVisits")
   redeemedRewards  MilestoneReward[] @relation("StaffRedeemedRewards")
+  consumedClaims   RewardClaim[]     @relation("StaffConsumedClaims")
 
   @@index([businessId])
   @@index([branchId])
@@ -131,6 +133,7 @@ model CustomerProfile {
   business      Business       @relation("BusinessCustomerProfiles", fields: [businessId], references: [id], onDelete: Restrict)
   loyaltyCycles LoyaltyCycle[] @relation("CustomerProfileLoyaltyCycles")
   visitRequests VisitRequest[] @relation("CustomerProfileVisitRequests")
+  rewardClaims  RewardClaim[]  @relation("CustomerProfileRewardClaims")
 
   @@unique([customerId, businessId])
   @@index([customerId])
@@ -153,6 +156,7 @@ model LoyaltyProgram {
 
   milestones    Milestone[]    @relation("ProgramMilestones")
   loyaltyCycles LoyaltyCycle[] @relation("ProgramLoyaltyCycles")
+  rewardClaims  RewardClaim[]  @relation("ProgramRewardClaims")
   // Note: Partial unique index for active program per branch is documented in database.md
   // CREATE UNIQUE INDEX unique_active_program_per_branch ON "LoyaltyProgram" ("branchId") WHERE "isActive" = true;
 
@@ -174,6 +178,7 @@ model Milestone {
 
   program          LoyaltyProgram    @relation("ProgramMilestones", fields: [programId], references: [id], onDelete: Restrict)
   milestoneRewards MilestoneReward[] @relation("MilestoneRewards")
+  rewardClaims     RewardClaim[]     @relation("MilestoneRewardClaims")
 
   @@unique([programId, visitNumber])
   @@index([programId])
@@ -195,6 +200,7 @@ model LoyaltyCycle {
   program          LoyaltyProgram    @relation("ProgramLoyaltyCycles", fields: [programId], references: [id], onDelete: Restrict)
   visits           Visit[]           @relation("LoyaltyCycleVisits")
   milestoneRewards MilestoneReward[] @relation("LoyaltyCycleMilestoneRewards")
+  rewardClaims     RewardClaim[]     @relation("LoyaltyCycleRewardClaims")
   // Note: Partial unique index for active cycle is documented in database.md
   // CREATE UNIQUE INDEX unique_active_cycle_per_customer_program ON "LoyaltyCycle" ("customerProfileId", "programId") WHERE "status" = 'ACTIVE';
 
@@ -246,6 +252,12 @@ model Visit {
   @@index([loyaltyCycleId, visitType])
 }
 
+enum RewardClaimStatus {
+  PENDING
+  CONSUMED
+  EXPIRED
+}
+
 model MilestoneReward {
   id                        String                @id @default(uuid())
   loyaltyCycleId            String
@@ -268,6 +280,36 @@ model MilestoneReward {
   @@unique([loyaltyCycleId, milestoneId])
   @@index([loyaltyCycleId])
   @@index([loyaltyCycleId, status])
+}
+
+model RewardClaim {
+  id                  String            @id @default(uuid())
+  customerProfileId   String
+  loyaltyCycleId      String?
+  programId           String
+  branchId            String
+  milestoneId         String
+  expectedVisitNumber Int
+  tokenHash           String            @unique
+  status              RewardClaimStatus @default(PENDING)
+  expiresAt           DateTime
+  consumedAt          DateTime?
+  consumedByStaffId   String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  customerProfile CustomerProfile @relation("CustomerProfileRewardClaims", fields: [customerProfileId], references: [id], onDelete: Restrict)
+  loyaltyCycle    LoyaltyCycle?   @relation("LoyaltyCycleRewardClaims", fields: [loyaltyCycleId], references: [id], onDelete: Restrict)
+  program         LoyaltyProgram  @relation("ProgramRewardClaims", fields: [programId], references: [id], onDelete: Restrict)
+  branch          Branch          @relation("BranchRewardClaims", fields: [branchId], references: [id], onDelete: Restrict)
+  milestone       Milestone       @relation("MilestoneRewardClaims", fields: [milestoneId], references: [id], onDelete: Restrict)
+  consumedByStaff Staff?          @relation("StaffConsumedClaims", fields: [consumedByStaffId], references: [id], onDelete: Restrict)
+
+  @@index([customerProfileId])
+  @@index([branchId])
+  @@index([branchId, status])
+  @@index([tokenHash])
+  @@index([expiresAt])
 }
 
 model RefreshSession {

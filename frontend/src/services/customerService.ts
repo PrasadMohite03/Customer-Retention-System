@@ -86,6 +86,27 @@ export interface CustomerLoyaltyData {
   } | null;
 }
 
+export interface RewardClaimData {
+  claimId: string;
+  claimToken: string;
+  expiresAt: string;
+  expectedVisitNumber: number;
+  cycleLength: number;
+  reward: {
+    id: string;
+    name: string;
+    description?: string | null;
+    type: string;
+    value?: string | null;
+  };
+  business: {
+    name: string;
+  };
+  branch: {
+    name: string;
+  };
+}
+
 export interface CustomerHistoryCycleReward {
   id: string;
   rewardType: string;
@@ -105,6 +126,15 @@ export interface CustomerHistoryCycleVisit {
   createdAt: string;
 }
 
+export interface CustomerHistoryCycleMilestone {
+  id: string;
+  visitNumber: number;
+  rewardType: string;
+  rewardName?: string | null;
+  rewardDescription?: string | null;
+  rewardValue?: string | null;
+}
+
 export interface CustomerHistoryCycle {
   id: string;
   cycleNumber: number;
@@ -115,6 +145,7 @@ export interface CustomerHistoryCycle {
   qrToken?: string | null;
   startedAt: string | null;
   completedAt: string | null;
+  milestones?: CustomerHistoryCycleMilestone[];
   visits: CustomerHistoryCycleVisit[];
   rewards: CustomerHistoryCycleReward[];
 }
@@ -129,6 +160,12 @@ export interface CustomerHistoryItem {
       name: string;
       address?: string | null;
       qrToken: string;
+      program?: {
+        id: string;
+        name: string;
+        cycleLength: number;
+        milestones: CustomerHistoryCycleMilestone[];
+      } | null;
     }>;
   };
   cycles: CustomerHistoryCycle[];
@@ -217,6 +254,21 @@ export const customerService = {
     );
     if (!res.data.data) {
       throw new Error(res.data.message || 'Failed to submit visit request');
+    }
+    return res.data.data;
+  },
+
+  /**
+   * Generates a temporary Reward Claim token for the next qualifying visit that has a reward.
+   * Does NOT create a VisitRequest.
+   */
+  async createRewardClaim(qrToken: string): Promise<RewardClaimData> {
+    const res = await api.post<ApiResponse<RewardClaimData>>(
+      '/customer/reward-claims',
+      { qrToken }
+    );
+    if (!res.data.data) {
+      throw new Error(res.data.message || 'Failed to generate reward claim token');
     }
     return res.data.data;
   },

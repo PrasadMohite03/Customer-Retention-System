@@ -99,42 +99,66 @@ When creating or updating a `Milestone`, the payload must adhere strictly to the
   - Redeemed rewards show as `REDEEMED` with redemption date (`Used on <date>`).
   - The redemption token and `[ Show Reward ]` modal are permanently deactivated for that reward instance.
 
+- **Claim Reward Visit Flow (Reward Qualifying Visit):**
+  - Designed for qualifying visits that coincide with a configured reward milestone (e.g. Visit 4 of 4 where Visit 4 has a reward).
+  - Eliminates the two-step friction (`Request Stamp` → staff approves → `Show Reward` → staff redeems) into a single, seamless, atomic transaction.
+  - Customer taps **[ Claim Reward Visit → ]** to generate a short-lived, high-entropy claim token formatted as `RC-XXXX-XXXX-XXXX` with a 15-minute TTL.
+  - Raw claim tokens are **never** stored in the database. Only a deterministic SHA-256 hash is persisted in `RewardClaim.tokenHash` (`@unique`).
+  - Does NOT create a `VisitRequest`.
+  - Staff scans or enters the `RC-` token.
+  - The staff/owner scanner validates the token via `POST /api/staff/reward-claims/validate` (read-only).
+  - On confirmation (`POST /api/staff/reward-claims/confirm`), the backend executes **ONE atomic transaction**:
+    1. Atomically marks `RewardClaim.status = 'CONSUMED'`, `consumedAt = now()`, and `consumedByStaffId`.
+    2. Lazily creates `LoyaltyCycle` if none exists yet.
+    3. Creates a `Visit` record: `visitType = QUALIFYING`, `visitNumberInCycle = expectedVisitNumber`, `approvedByStaffId = staff.id`.
+    4. Increments `LoyaltyCycle.visitCount` to `expectedVisitNumber`. If `visitCount >= cycleLength`, marks cycle `COMPLETED` with `completedAt`.
+    5. Creates the snapshotted `MilestoneReward` record and immediately sets its `status = REDEEMED`, `redeemedAt = now()`, and `redeemedByStaffId`.
+    6. Creates an analytics `Visit` record: `visitType = REWARD_REDEMPTION`, `visitNumberInCycle = null`, `approvedByStaffId = staff.id` (strictly isolated from cycle progress).
+    7. All steps succeed or rollback entirely on failure.
+  - Prevents race conditions, double consumption, or state misalignment via atomic conditional updates and transaction isolation.
+
 ## 12. Customer Loyalty UI Presentation Rules
-To present a seamless and motivating punch card experience to customers, the frontend presentation calculates visual slots differently from the backend counter:
+The loyalty pass provides a transparent, intuitive punch card experience strictly aligned with program configuration:
 
-### Visual Slots vs. Backend Counting
-For a program with `cycleLength = 4`:
-- **Backend `cycleLength = 4`**: Exactly 4 qualifying visits are required to complete the cycle and unlock the milestone reward.
-- **Frontend `totalVisualSlots = cycleLength + 1 = 5`**: The card visually displays 5 slots:
-  - **Slots 1 to 4**: Qualifying stamp slots.
-  - **Slot 5**: The Reward / Redemption slot.
+### Exact Slot Model (`cycleLength` Visual Slots)
+For a program with `cycleLength = N`:
+- **Card Slots:** The stamp card visually displays **EXACTLY `N` slots** (e.g., `cycleLength = 4` has 4 slots: `[ 1 ] [ 2 ] [ 3 ] [ 4 ]`).
+- **No Extra Redemption Slot:** There is **NO** separate 5th visual slot. Each slot represents exactly one qualifying visit.
+- **Milestone Attribution:** Milestones configured by the owner (`milestone.visitNumber`) attach directly to their matching qualifying visit slot:
+  - Normal visit without reward (`NONE`) → clean number or checkmark checkpoint.
+  - Milestone visit with reward → subtle gift indicator (`[ 🎁 ]`) attached to that specific visit number.
+- **Slot States:**
+  - Upcoming visit: shows slot number (or subtle gift icon if attached to a reward).
+  - Completed visit: shows green checkmark `[ ✓ ]`.
+  - Reached/unlocked reward milestone: shows unlocked reward badge.
+  - Redeemed reward milestone: shows completed checkmark state.
 
-### Visual State Progression
-1. **In-Progress Visits (`visitCount < cycleLength`):**
-   - Header badge: `X of 5` (e.g., `1 of 5`, `2 of 5`, `3 of 5`).
-   - Stamp slots 1 to X are checked green (`[✓]`). Slots X+1 to 4 are empty stamp boxes.
-   - Slot 5 shows the locked reward icon (`[🎁]`).
-   - Subtitle: `X qualifying visits completed • Y stamps until next reward`.
-   - Action: `[ Request a Stamp ]` is available.
-2. **Cycle Completed & Reward Unlocked (`visitCount === cycleLength`, reward `UNLOCKED`):**
-   - Header badge: `4 of 5`.
-   - Stamp slots 1 to 4 are checked green (`[✓] [✓] [✓] [✓]`).
-   - Slot 5 displays as active/unlocked reward slot: `[🎁] Reward`.
-   - Subtitle: `4 qualifying visits completed`.
-   - Card Banner: `🎉 Reward Unlocked` with reward details.
-   - Primary Action: `[ Show Reward ]` button (opens QR modal with redemption token). Stamp request button is replaced.
-3. **Reward Redeemed (`reward.status === 'REDEEMED'`):**
-   - Header badge: `5 of 5`.
-   - All 5 slots show green checkmarks: `[✓] [✓] [✓] [✓] [✓]`.
-   - Subtitle: `Reward redeemed • Cycle completed`.
-   - Helper text: `Your next qualifying visit starts a new loyalty cycle.`
-   - No stamp request or show reward button is shown for the completed cycle.
-4. **Next Cycle Start:**
-   - On the customer's next store visit, they request a normal stamp.
-   - Upon staff approval, Cycle 2 is created with `visitCount = 1`.
-   - Card resets to `1 of 5` for Cycle 2: `[✓] [ ] [ ] [ ] [🎁]`.
+### Visit Progress & Badge Counters
+- **Badge Counter:** Strictly displays `X of N visits` (e.g., `0 of 4`, `1 of 4`, `2 of 4`, `3 of 4`, `4 of 4`).
+- **Completion Invariant:** A 4-visit program completes at `4 of 4 visits`. It **NEVER** becomes `5 of 4` or `5 of 5`.
+- **Visits Until Next Reward:** Calculated by finding the next active milestone with `visitNumber > current visitCount` that offers a non-`NONE` reward (e.g., "1 more visit until Free Coffee").
 
-> **CRITICAL DOMAIN SEPARATION:** The 5th slot is NEVER a fifth qualifying visit and NEVER increments `LoyaltyCycle.visitCount`. Backend `LoyaltyCycle.visitCount` remains bounded between `0` and `cycleLength`.
+### Dual Action Flows
+1. **Normal Qualifying Visit (No Reward on Next Visit):**
+   - Action CTA: **[ Request a Stamp ]**.
+   - Creates a standard `VisitRequest` (`PENDING`).
+   - Staff approves via standard staff dashboard queue.
+2. **Reward Qualifying Visit (Reward on Next Visit):**
+   - Action CTA: **[ Claim Reward Visit → ]**.
+   - Helper copy: "Complete your visit to unlock & claim [Reward Name]".
+   - Customer shows dynamic `RC-` Claim QR.
+   - Staff scans with camera or enters code, completing both the qualifying visit and the reward redemption in one step.
+3. **Unlocked Reward (Already Earned Intermediate or Terminal Reward):**
+   - Action CTA: **[ Show Reward ]**.
+   - Customer presents `RP-` Redemption QR.
+   - Staff scans with camera or enters code to redeem without recording an additional qualifying stamp.
+
+### Post-Redemption Loyalty Presentation
+- When the customer completes all visits and redeems the final reward, the card displays a clean current-cycle state:
+  - Header: `0 of 4 visits` (for the upcoming cycle).
+  - Card message: "Your next loyalty cycle starts on your next visit."
+  - Past completed cycle and redeemed rewards remain accessible in customer reward history.
+  - A new database `LoyaltyCycle` is NOT created prematurely upon page load; it is lazily created when the customer's next qualifying visit is actually approved.
 
 ## 13. Analytics & Reporting Foundation
 The distinction between `VisitType.QUALIFYING` and `VisitType.REWARD_REDEMPTION` provides a comprehensive foundation for merchant analytics without data distortion:
@@ -145,6 +169,7 @@ The distinction between `VisitType.QUALIFYING` and `VisitType.REWARD_REDEMPTION`
 - **Unique Customers:** Grouping or counting distinct `customerId` across all visits reflects actual physical customer reach.
 - **Branch Breakdown:** All visits record `branchId`, allowing multi-branch businesses to compare footfall and redemption volume across locations.
 - **Time-Series Analysis:** Visits are timestamped with `createdAt`, enabling daily, weekly, and monthly trends for customer retention.
+
 
 
 

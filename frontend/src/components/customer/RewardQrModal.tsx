@@ -13,6 +13,7 @@ import {
   Clock,
 } from 'lucide-react';
 import type { CustomerRewardItem } from '../../services/customerService';
+import { AaoMascot } from '../ui/AaoBrand';
 
 interface RewardQrModalProps {
   reward: CustomerRewardItem | null;
@@ -62,7 +63,7 @@ export const RewardQrModal: React.FC<RewardQrModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
     >
       <div className="relative w-full max-w-sm rounded-3xl bg-[#FFFFFF] shadow-2xl border border-slate-100 overflow-hidden flex flex-col text-[#172033]">
-        {/* Header - Sleek #172033 for UNLOCKED, Neutral Slate for REDEEMED */}
+        {/* Header - Warm AAO styling */}
         <div
           className={`p-5 pt-6 relative text-center text-white ${
             isUnlocked ? 'bg-[#172033]' : 'bg-slate-900'
@@ -76,33 +77,45 @@ export const RewardQrModal: React.FC<RewardQrModalProps> = ({
             <X className="w-5 h-5" />
           </button>
 
-          {/* Status pill */}
-          {isUnlocked ? (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EAFBEF] border border-[#55E07E]/40 text-[#0E7A36] text-xs font-extrabold mb-2.5 shadow-xs">
-              <Gift className="w-3.5 h-3.5 text-[#16A34A]" />
-              <span>UNLOCKED REWARD</span>
-            </div>
-          ) : (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-slate-300 text-xs font-semibold mb-2.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#55E07E]" />
-              <span>REDEEMED IN STORE</span>
-            </div>
-          )}
+          {/* Status pill & mascot banner */}
+          <div className="flex flex-col items-center">
+            {isUnlocked ? (
+              <>
+                <div className="mb-2">
+                  <AaoMascot mood="reward" size={72} className="mx-auto" />
+                </div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EAFBEF] border border-[#55E07E]/40 text-[#0E7A36] text-[11px] font-extrabold mb-1.5 shadow-xs">
+                  <Gift className="w-3.5 h-3.5 text-[#16A34A]" />
+                  <span>YOUR REWARD IS READY!</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mb-2">
+                  <AaoMascot mood="celebrate" size={68} className="mx-auto" />
+                </div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-slate-300 text-[11px] font-semibold mb-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#55E07E]" />
+                  <span>REWARD REDEEMED</span>
+                </div>
+              </>
+            )}
 
-          <h3 className="text-xl font-black tracking-tight text-white leading-tight">
-            {displayName}
-          </h3>
-          {businessName && (
-            <p className="text-xs text-slate-300 mt-1.5 flex items-center justify-center gap-1.5 font-medium">
-              <Store className="w-3.5 h-3.5 text-slate-400" />
-              <span>{businessName}</span>
-            </p>
-          )}
-          {reward.rewardValue && (
-            <p className="text-xs font-bold text-[#FFD444] mt-1">
-              Value: {reward.rewardValue}
-            </p>
-          )}
+            <h3 className="text-xl font-black tracking-tight text-white leading-tight">
+              {displayName}
+            </h3>
+            {businessName && (
+              <p className="text-xs text-slate-300 mt-1 flex items-center justify-center gap-1.5 font-medium">
+                <Store className="w-3.5 h-3.5 text-slate-400" />
+                <span>{businessName}</span>
+              </p>
+            )}
+            {reward.rewardValue && (
+              <p className="text-xs font-bold text-[#FFD444] mt-1">
+                Value: {reward.rewardValue}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Content body */}
@@ -110,17 +123,17 @@ export const RewardQrModal: React.FC<RewardQrModalProps> = ({
           {isUnlocked ? (
             <>
               {/* UNLOCKED: Show Reward QR Container */}
-              <div className="p-4 bg-[#FFFFFF] rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center justify-center mb-4">
+              <div className="p-4 bg-[#FFFFFF] rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center justify-center mb-3">
                 {rawToken ? (
                   <QRCodeSVG
                     value={rawToken}
-                    size={200}
+                    size={190}
                     level="M"
                     includeMargin
-                    className="w-full h-auto max-w-[200px]"
+                    className="w-full h-auto max-w-[190px]"
                   />
                 ) : (
-                  <div className="w-48 h-48 flex flex-col items-center justify-center text-[#667085]">
+                  <div className="w-44 h-44 flex flex-col items-center justify-center text-[#667085]">
                     <QrCode className="w-12 h-12 mb-2 text-slate-400" />
                     <span className="text-xs">QR Code Ready</span>
                   </div>
@@ -131,7 +144,7 @@ export const RewardQrModal: React.FC<RewardQrModalProps> = ({
               <div className="flex items-center gap-2.5 text-xs font-medium text-[#172033] mb-4 bg-[#F8FAFC] px-3.5 py-2.5 rounded-xl border border-slate-200">
                 <ShieldCheck className="w-4 h-4 text-[#16A34A] shrink-0" />
                 <span className="text-left text-xs leading-relaxed text-[#172033]">
-                  Present this QR to store staff at checkout. Staff will scan to validate & apply.
+                  Present this QR to store staff at checkout. Staff will scan to validate & apply your reward.
                 </span>
               </div>
 
@@ -176,7 +189,7 @@ export const RewardQrModal: React.FC<RewardQrModalProps> = ({
 
                 <div>
                   <h4 className="text-base font-bold text-[#172033]">
-                    Already Redeemed
+                    See you again!
                   </h4>
                   <p className="text-xs text-[#667085] mt-1">
                     This reward was verified and redeemed at the counter.
@@ -215,7 +228,7 @@ export const RewardQrModal: React.FC<RewardQrModalProps> = ({
                 </div>
 
                 <p className="text-[11px] text-[#667085] bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                  Used reward vouchers cannot be redeemed again. Continue collecting stamps on your next visit to unlock new rewards!
+                  Used reward vouchers cannot be redeemed again. Keep collecting stamps on your next visit to unlock new rewards!
                 </p>
               </div>
             </>

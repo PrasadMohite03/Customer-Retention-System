@@ -6,10 +6,10 @@ import {
   QrCode,
   Gift,
   User,
-  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { customerService } from '../services/customerService';
+import { AaoLogo } from '../components/ui/AaoBrand';
 
 export const CustomerLayout: React.FC = () => {
   const { user } = useAuth();
@@ -43,24 +43,17 @@ export const CustomerLayout: React.FC = () => {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen bg-slate-100 sm:bg-slate-200 flex justify-center text-[#172033] font-sans">
+    <div className="min-h-screen bg-slate-100 sm:bg-slate-200/80 flex justify-center text-[#172033] font-sans">
       {/* Mobile-first centered phone frame */}
-      <div className="w-full max-w-md min-h-screen bg-[#F8FAFC] flex flex-col relative shadow-md border-x border-[#E5E7EB] pb-20">
+      <div className="w-full max-w-md min-h-screen bg-[#F8FAFC] flex flex-col relative shadow-md border-x border-[#E5E7EB] pb-24">
         {/* Top Header */}
-        <header className="sticky top-0 z-30 bg-[#FFFFFF] border-b border-[#E5E7EB] px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#FFD444] flex items-center justify-center text-[#172033] shadow-xs">
-              <Sparkles className="w-4 h-4 text-[#172033] stroke-[2.5]" />
-            </div>
-            <div>
-              <span className="font-black text-base tracking-tight text-[#172033] flex items-center gap-1.5 leading-none">
-                RetainPulse
-              </span>
-              <span className="text-[10px] text-[#667085] font-semibold tracking-wide">
-                Customer Loyalty
-              </span>
-            </div>
-          </div>
+        <header className="sticky top-0 z-30 bg-[#FFFFFF] border-b border-[#E5E7EB] px-4 py-2.5 flex items-center justify-between">
+          <NavLink to="/customer/dashboard" className="flex items-center gap-2">
+            <AaoLogo variant="full" size="sm" className="h-7 w-auto" />
+            <span className="hidden sm:inline-block text-[10px] text-[#667085] font-semibold tracking-wide border-l border-[#E5E7EB] pl-2">
+              Scan • Earn • Return
+            </span>
+          </NavLink>
 
           <NavLink
             to="/customer/profile"
@@ -83,7 +76,7 @@ export const CustomerLayout: React.FC = () => {
         {/* Persistent Bottom Navigation Bar */}
         <nav
           aria-label="Bottom Navigation"
-          className="fixed bottom-0 z-40 w-full max-w-md bg-[#FFFFFF] border-t border-[#E5E7EB] px-2 py-1.5 shadow-[0_-2px_10px_rgba(0,0,0,0.04)]"
+          className="fixed bottom-0 z-40 w-full max-w-md bg-[#FFFFFF] border-t border-[#E5E7EB] px-2 py-1.5 shadow-[0_-2px_12px_rgba(0,0,0,0.03)]"
         >
           <div className="flex items-center justify-around relative">
             {/* 1. Home */}
@@ -91,15 +84,23 @@ export const CustomerLayout: React.FC = () => {
               to="/customer/dashboard"
               className={({ isActive }) =>
                 `flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all ${
-                  isActive ? 'text-[#172033] font-bold' : 'text-[#667085] hover:text-[#172033] font-medium'
+                  isActive
+                    ? 'text-[#172033] font-bold'
+                    : 'text-[#667085] hover:text-[#172033] font-medium'
                 }`
               }
             >
               {({ isActive }) => (
                 <>
-                  <Home className={`w-5 h-5 mb-0.5 ${isActive ? 'stroke-[2.6] text-[#172033]' : 'stroke-[1.8]'}`} />
+                  <Home
+                    className={`w-5 h-5 mb-0.5 ${
+                      isActive ? 'stroke-[2.6] text-[#172033]' : 'stroke-[1.8]'
+                    }`}
+                  />
                   <span className="text-[10px] leading-tight">Home</span>
-                  {isActive && <span className="w-1.5 h-1.5 rounded-full bg-[#FFD444] mt-0.5" />}
+                  {isActive && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#FFD444] mt-0.5" />
+                  )}
                 </>
               )}
             </NavLink>
@@ -109,20 +110,28 @@ export const CustomerLayout: React.FC = () => {
               to="/customer/explore"
               className={({ isActive }) =>
                 `flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all ${
-                  isActive ? 'text-[#172033] font-bold' : 'text-[#667085] hover:text-[#172033] font-medium'
+                  isActive
+                    ? 'text-[#172033] font-bold'
+                    : 'text-[#667085] hover:text-[#172033] font-medium'
                 }`
               }
             >
               {({ isActive }) => (
                 <>
-                  <Compass className={`w-5 h-5 mb-0.5 ${isActive ? 'stroke-[2.6] text-[#172033]' : 'stroke-[1.8]'}`} />
+                  <Compass
+                    className={`w-5 h-5 mb-0.5 ${
+                      isActive ? 'stroke-[2.6] text-[#172033]' : 'stroke-[1.8]'
+                    }`}
+                  />
                   <span className="text-[10px] leading-tight">Explore</span>
-                  {isActive && <span className="w-1.5 h-1.5 rounded-full bg-[#FFD444] mt-0.5" />}
+                  {isActive && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#FFD444] mt-0.5" />
+                  )}
                 </>
               )}
             </NavLink>
 
-            {/* 3. Center Elevated SCAN Button - YELLOW RetainPulse Primary */}
+            {/* 3. Center Elevated SCAN Button - AAO Primary Yellow #FFD444 */}
             <div className="relative -top-5 flex flex-col items-center">
               <NavLink
                 to="/customer/scan"
@@ -130,39 +139,47 @@ export const CustomerLayout: React.FC = () => {
                 className={({ isActive }) =>
                   `w-14 h-14 rounded-full flex items-center justify-center text-[#172033] shadow-md transition-all active:scale-95 border-4 border-[#FFFFFF] ${
                     isActive
-                      ? 'bg-[#FFD444] ring-3 ring-[#F4EB6C]'
-                      : 'bg-[#FFD444] hover:bg-[#F4EB6C]'
+                      ? 'bg-[#FFD444] ring-4 ring-[#FFD444]/30'
+                      : 'bg-[#FFD444] hover:bg-[#FACC15]'
                   }`
                 }
               >
-                <QrCode className="w-6 h-6 stroke-[2.4] text-[#172033]" />
+                <QrCode className="w-6 h-6 stroke-[2.5] text-[#172033]" />
               </NavLink>
               <span className="text-[10px] font-black text-[#172033] tracking-tight mt-1">
                 SCAN
               </span>
             </div>
 
-            {/* 4. Rewards - Supporting Blue accent for rewards badge */}
+            {/* 4. Rewards */}
             <NavLink
               to="/customer/rewards"
               className={({ isActive }) =>
                 `flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all relative ${
-                  isActive ? 'text-[#172033] font-bold' : 'text-[#667085] hover:text-[#172033] font-medium'
+                  isActive
+                    ? 'text-[#172033] font-bold'
+                    : 'text-[#667085] hover:text-[#172033] font-medium'
                 }`
               }
             >
               {({ isActive }) => (
                 <>
-                  <div className="relative mb-0.5">
-                    <Gift className={`w-5 h-5 ${isActive ? 'stroke-[2.6] text-[#172033]' : 'stroke-[1.8]'}`} />
+                  <div className="relative">
+                    <Gift
+                      className={`w-5 h-5 mb-0.5 ${
+                        isActive ? 'stroke-[2.6] text-[#172033]' : 'stroke-[1.8]'
+                      }`}
+                    />
                     {unlockedCount > 0 && (
-                      <span className="absolute -top-1.5 -right-2 px-1.5 py-0.2 min-w-[16px] h-4 rounded-full bg-[#006199] text-[9px] font-extrabold text-white flex items-center justify-center border border-white">
+                      <span className="absolute -top-1 -right-2 px-1.5 py-0.2 rounded-full bg-[#55E07E] text-[#172033] text-[9px] font-black border border-white">
                         {unlockedCount}
                       </span>
                     )}
                   </div>
                   <span className="text-[10px] leading-tight">Rewards</span>
-                  {isActive && <span className="w-1.5 h-1.5 rounded-full bg-[#FFD444] mt-0.5" />}
+                  {isActive && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#FFD444] mt-0.5" />
+                  )}
                 </>
               )}
             </NavLink>
@@ -172,15 +189,23 @@ export const CustomerLayout: React.FC = () => {
               to="/customer/profile"
               className={({ isActive }) =>
                 `flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all ${
-                  isActive ? 'text-[#172033] font-bold' : 'text-[#667085] hover:text-[#172033] font-medium'
+                  isActive
+                    ? 'text-[#172033] font-bold'
+                    : 'text-[#667085] hover:text-[#172033] font-medium'
                 }`
               }
             >
               {({ isActive }) => (
                 <>
-                  <User className={`w-5 h-5 mb-0.5 ${isActive ? 'stroke-[2.6] text-[#172033]' : 'stroke-[1.8]'}`} />
+                  <User
+                    className={`w-5 h-5 mb-0.5 ${
+                      isActive ? 'stroke-[2.6] text-[#172033]' : 'stroke-[1.8]'
+                    }`}
+                  />
                   <span className="text-[10px] leading-tight">Profile</span>
-                  {isActive && <span className="w-1.5 h-1.5 rounded-full bg-[#FFD444] mt-0.5" />}
+                  {isActive && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#FFD444] mt-0.5" />
+                  )}
                 </>
               )}
             </NavLink>

@@ -215,7 +215,7 @@ export const CustomerScan: React.FC = () => {
           </div>
 
           <p className="text-xs text-[#667085] mt-4 text-center max-w-xs">
-            Point your camera at the RetainPulse QR code displayed at the store counter.
+            Point your camera at the AAO QR code displayed at the store counter.
           </p>
         </div>
       )}
@@ -258,14 +258,14 @@ export const CustomerScan: React.FC = () => {
       )}
 
       {/* Instruction Card */}
-      <div className="p-4 rounded-xl bg-[#FFFFFF] border border-[#E5E7EB] flex items-start gap-3">
-        <div className="w-8 h-8 rounded-lg bg-[#FFD444]/20 text-[#172033] flex items-center justify-center shrink-0">
+      <div className="p-4 rounded-2xl bg-[#FFFFFF] border border-[#E5E7EB] shadow-xs flex items-start gap-3">
+        <div className="w-8 h-8 rounded-xl bg-[#FFD444]/25 text-[#172033] flex items-center justify-center shrink-0">
           <Sparkles className="w-4 h-4 text-[#172033]" />
         </div>
         <div className="text-xs">
-          <p className="font-bold text-[#172033]">How in-store stamping works</p>
+          <p className="font-bold text-[#172033]">Scan. Earn. Come Again.</p>
           <p className="text-[#667085] mt-0.5 leading-relaxed">
-            Every participating merchant has a unique QR code at their checkout register. Scan it with RetainPulse to record your visit and request your stamp from staff!
+            Every participating merchant has a unique QR code at their checkout register. Scan it with AAO to record your visit and request your stamp from staff!
           </p>
         </div>
       </div>

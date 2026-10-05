@@ -195,3 +195,49 @@ export async function redeemRewardByTokenHandler(
   }
 }
 
+export async function validateRewardClaimTokenHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    if (!req.user) {
+      throw new AppError('Unauthorized: User context missing', 401);
+    }
+
+    const { claimToken } = req.body;
+    const result = await StaffVisitService.validateRewardClaimToken(req.user, claimToken);
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Reward claim token validated successfully',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function confirmRewardClaimHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    if (!req.user) {
+      throw new AppError('Unauthorized: User context missing', 401);
+    }
+
+    const { claimToken } = req.body;
+    const result = await StaffVisitService.confirmRewardClaim(req.user, claimToken);
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Reward visit confirmed and redeemed successfully',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+

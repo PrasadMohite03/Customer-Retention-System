@@ -70,6 +70,41 @@ export interface RedeemedRewardTokenResult {
   rewardValue?: string | null;
 }
 
+export interface ValidatedRewardClaimInfo {
+  claimId: string;
+  customerName: string;
+  customerPhone: string;
+  expectedVisitNumber: number;
+  cycleLength: number;
+  rewardName: string;
+  rewardDescription?: string | null;
+  rewardType: string;
+  rewardValue?: string | null;
+  branchName: string;
+  businessName: string;
+  expiresAt: string;
+}
+
+export interface ConfirmedRewardClaimResult {
+  qualifyingVisitId: string;
+  redemptionVisitId: string;
+  visitNumberInCycle: number;
+  cycleNumber: number;
+  cycleCompleted: boolean;
+  reward: {
+    id: string;
+    rewardName: string;
+    rewardType: string;
+    rewardValue?: string | null;
+    status: string;
+    redeemedAt: string;
+  };
+  customer: {
+    id: string;
+    name: string;
+  };
+}
+
 export interface StaffDashboardData {
   pendingRequests: PendingVisitRequest[];
   availableRewards: UnlockedCustomerReward[];
@@ -183,6 +218,34 @@ export const staffService = {
     );
     if (!res.data.data) {
       throw new Error(res.data.message || 'Failed to redeem reward');
+    }
+    return res.data.data;
+  },
+
+  /**
+   * Validate a customer-presented Reward Claim QR token.
+   * POST /api/staff/reward-claims/validate
+   */
+  async validateRewardClaim(claimToken: string): Promise<ValidatedRewardClaimInfo> {
+    const res = await api.post<ApiResponse<ValidatedRewardClaimInfo>>('/staff/reward-claims/validate', {
+      claimToken,
+    });
+    if (!res.data.data) {
+      throw new Error(res.data.message || 'Failed to validate reward claim token');
+    }
+    return res.data.data;
+  },
+
+  /**
+   * Complete Reward Visit via atomic transaction.
+   * POST /api/staff/reward-claims/confirm
+   */
+  async confirmRewardClaim(claimToken: string): Promise<ConfirmedRewardClaimResult> {
+    const res = await api.post<ApiResponse<ConfirmedRewardClaimResult>>('/staff/reward-claims/confirm', {
+      claimToken,
+    });
+    if (!res.data.data) {
+      throw new Error(res.data.message || 'Failed to complete reward visit');
     }
     return res.data.data;
   },

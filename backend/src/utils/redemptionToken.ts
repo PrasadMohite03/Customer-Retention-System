@@ -59,3 +59,40 @@ export function isValidRedemptionTokenFormat(token: string): boolean {
   if (typeof token !== 'string') return false;
   return /^RP-[0-9A-F]{8}-[0-9A-F]{8}-[0-9A-F]{8}$/i.test(token.trim());
 }
+
+/**
+ * Format 24 hex characters into the standard RewardClaim display format:
+ * RC-XXXXXXXX-XXXXXXXX-XXXXXXXX (RC- prefix + 3 groups of 8 hex chars)
+ */
+export function formatRewardClaimToken(hex24: string): string {
+  const clean = hex24.toUpperCase().replace(/[^0-9A-F]/g, '').slice(0, 24);
+  return `RC-${clean.slice(0, 8)}-${clean.slice(8, 16)}-${clean.slice(16, 24)}`;
+}
+
+/**
+ * Generate a cryptographically random RewardClaim token using crypto.randomBytes(12).
+ * Format: RC-XXXXXXXX-XXXXXXXX-XXXXXXXX (24 uppercase hex chars from 12 random bytes)
+ */
+export function generateRewardClaimToken(): string {
+  const raw = crypto.randomBytes(12).toString('hex');
+  return formatRewardClaimToken(raw);
+}
+
+/**
+ * Compute deterministic SHA-256 hash of a RewardClaim token.
+ * Used for database storage and lookup.
+ */
+export function hashRewardClaimToken(rawToken: string): string {
+  const normalized = rawToken.trim().toUpperCase();
+  return crypto.createHash('sha256').update(normalized).digest('hex');
+}
+
+/**
+ * Validate the format of a RewardClaim token.
+ * Expected format: RC-XXXXXXXX-XXXXXXXX-XXXXXXXX (RC- prefix + 3 groups of 8 hex chars)
+ */
+export function isValidRewardClaimTokenFormat(token: string): boolean {
+  if (typeof token !== 'string') return false;
+  return /^RC-[0-9A-F]{8}-[0-9A-F]{8}-[0-9A-F]{8}$/i.test(token.trim());
+}
+

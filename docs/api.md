@@ -209,11 +209,11 @@ Logically read-only with respect to loyalty state. Idempotently creates `Custome
   ```
   *Note:* `redemptionToken` is provided only for `status === 'UNLOCKED'` to render the dynamic customer reward QR/code. For `REDEEMED` rewards, `redemptionToken` is omitted. Raw database hashes are never exposed.
 
-### Create Visit Request
+### Create Visit Request (Normal Stamp)
 `POST /api/customer/visit-requests`
 
-Submits a visit stamp request. Enforces at most one `PENDING` request per `(customerProfileId, branchId)`.
-*Note:* Visit requests are exclusively for earning visits / stamps. Customers with unlocked rewards do NOT need to submit a visit request to redeem their reward. Milestone rewards are unlocked immediately upon milestone visit approval.
+Submits a normal visit stamp request. Enforces at most one `PENDING` request per `(customerProfileId, branchId)`.
+*Note:* Visit requests are exclusively for earning visits / stamps that do not have an attached reward milestone. For visits with rewards, use `POST /api/customer/reward-claims`.
 
 **Request Body:**
 ```json
@@ -227,6 +227,54 @@ Submits a visit stamp request. Enforces at most one `PENDING` request per `(cust
 - `400 Bad Request`: Branch is inactive.
 - `404 Not Found`: Invalid QR token.
 - `409 Conflict`: Customer already has a pending visit request for this branch.
+- `422 Unprocessable Entity`: Branch has no active loyalty program.
+
+### Create Reward Claim ("Claim Reward Visit")
+`POST /api/customer/reward-claims`
+
+Generates a short-lived claim token (`RC-XXXX-XXXX-XXXX`) for a qualifying visit that coincides with an attached reward milestone (e.g. Visit 4 of 4). Replaces the standard `VisitRequest` to enable single-scan visit recording and reward redemption.
+
+- **TTL:** 15 minutes (`expiresAt = now + 15m`).
+- **Idempotent Invalidation:** Automatically sets any previously `PENDING` claims for this customer and branch to `EXPIRED`.
+- **Token Security:** Raw token is returned in the response for customer QR generation; only its deterministic SHA-256 hash is persisted in the database.
+
+**Request Body:**
+```json
+{
+  "qrToken": "qr_br1_xyz"
+}
+```
+
+**Responses:**
+- `201 Created`:
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "claimId": "claim-uuid",
+      "claimToken": "RC-A1B2-C3D4-E5F6",
+      "expiresAt": "2026-10-05T15:35:00.000Z",
+      "expectedVisitNumber": 4,
+      "cycleLength": 4,
+      "reward": {
+        "id": "milestone-uuid",
+        "name": "Head Massage",
+        "description": "Complimentary 30-min massage",
+        "type": "FREE_ITEM",
+        "value": null
+      },
+      "business": {
+        "name": "Luxe Spa"
+      },
+      "branch": {
+        "name": "Downtown Branch"
+      }
+    }
+  }
+  ```
+- `400 Bad Request`: Missing `qrToken`, branch is inactive, or upcoming visit does not have an attached reward milestone.
+- `404 Not Found`: Invalid or expired QR code.
+- `409 Conflict`: Reward for this milestone has already been claimed in this cycle.
 - `422 Unprocessable Entity`: Branch has no active loyalty program.
 
 ### Customer Loyalty History
@@ -519,6 +567,102 @@ Atomically marks an `UNLOCKED` reward as `REDEEMED` by ID. Reward snapshot field
 **Responses:**
 - `200 OK`: `{ "status": "success", "message": "Reward marked as redeemed" }`
 - `409 Conflict`: Reward already redeemed.
+
+---
+
+## Staff Reward Claim APIs ("Claim Reward Visit")
+
+Requires authentication with role `STAFF` or `OWNER`. Handles scanning, validation, and single-step confirmation for reward-qualifying visits (`RC-XXXX-XXXX-XXXX`).
+
+### Validate Reward Claim Token (Read-Only)
+`POST /api/staff/reward-claims/validate`
+
+Performs non-mutating validation of an `RC-` claim token. Verifies business tenant boundaries, staff branch scoping, token TTL, customer visit progress, and duplicate reward guards.
+
+**Request Body:**
+```json
+{
+  "claimToken": "RC-A1B2-C3D4-E5F6"
+}
+```
+
+**Responses:**
+- `200 OK`:
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "claimId": "claim-uuid",
+      "customerName": "John Doe",
+      "customerPhone": "******1234",
+      "expectedVisitNumber": 4,
+      "cycleLength": 4,
+      "rewardName": "Head Massage",
+      "rewardDescription": "Complimentary 30-min massage",
+      "rewardType": "FREE_ITEM",
+      "rewardValue": null,
+      "branchName": "Downtown Branch",
+      "businessName": "Luxe Spa",
+      "expiresAt": "2026-10-05T15:35:00.000Z"
+    }
+  }
+  ```
+- `400 Bad Request`: Missing token, invalid format (must start with `RC-`), or milestone has no reward.
+- `403 Forbidden`: Claim belongs to another business or staff member is assigned to a different branch.
+- `404 Not Found`: Reward claim not found or invalid token.
+- `409 Conflict`: Claim has already been redeemed or customer visit count has changed.
+- `410 Gone`: Claim token has expired (15-minute TTL exceeded).
+
+### Confirm Reward Claim Visit (Atomic Mutation)
+`POST /api/staff/reward-claims/confirm`
+
+Atomically processes the entire reward-qualifying visit in a single database transaction:
+1. Marks `RewardClaim.status = 'CONSUMED'`, `consumedAt = now()`, `consumedByStaffId`.
+2. Creates `Visit` (`visitType = QUALIFYING`, `visitNumberInCycle = expectedVisitNumber`).
+3. Increments `LoyaltyCycle.visitCount` (marks `COMPLETED` if terminal visit).
+4. Creates snapshotted `MilestoneReward` and immediately sets `status = REDEEMED`.
+5. Creates analytics `Visit` (`visitType = REWARD_REDEMPTION`, `visitNumberInCycle = null`).
+
+**Request Body:**
+```json
+{
+  "claimToken": "RC-A1B2-C3D4-E5F6"
+}
+```
+
+**Responses:**
+- `200 OK`:
+  ```json
+  {
+    "status": "success",
+    "message": "Reward visit confirmed and reward redeemed successfully",
+    "data": {
+      "qualifyingVisitId": "visit-uuid-1",
+      "redemptionVisitId": "visit-uuid-2",
+      "visitNumberInCycle": 4,
+      "cycleNumber": 1,
+      "cycleCompleted": true,
+      "reward": {
+        "id": "milestone-reward-uuid",
+        "rewardName": "Head Massage",
+        "rewardType": "FREE_ITEM",
+        "rewardValue": null,
+        "status": "REDEEMED",
+        "redeemedAt": "2026-10-05T15:21:00.000Z"
+      },
+      "customer": {
+        "id": "customer-uuid",
+        "name": "John Doe"
+      }
+    }
+  }
+  ```
+- `400 Bad Request`: Missing or invalid token format.
+- `403 Forbidden`: Cross-business or cross-branch attempt.
+- `404 Not Found`: Reward claim not found.
+- `409 Conflict`: Claim already redeemed, token expired, or customer visit progress shifted.
+- `410 Gone`: Token expired.
+- `422 Unprocessable Entity`: No active loyalty program found for branch.
 
 ---
 

@@ -6,6 +6,8 @@ import { maskPhone } from '../utils/phone.utils';
 import {
   deriveRedemptionTokenForReward,
   hashRedemptionToken,
+  isValidRewardClaimTokenFormat,
+  hashRewardClaimToken,
 } from '../utils/redemptionToken';
 
 export interface AuthenticatedUserContext {
@@ -864,5 +866,414 @@ export class StaffVisitService {
         activeRewards: availableRewards.length,
       },
     };
+  }
+
+  /**
+   * Validate a customer-presented RewardClaim token for a "Claim Reward Visit".
+   * - Token must never appear in GET URL.
+   * - Hashes token using deterministic SHA-256 for lookup.
+   * - Checks tenant isolation (business and branch).
+   * - Validates token status: exists, not expired, not consumed.
+   * - Checks active loyalty cycle exists and expectedVisitNumber matches.
+   * - Checks milestone exists and has reward attached, reward not already claimed.
+   * - Returns safe confirmation details (customer name/phone masked, reward name/desc, expected visit, cycle length).
+   * - NEVER mutates the database.
+   */
+  static async validateRewardClaimToken(
+    user: AuthenticatedUserContext,
+    claimToken: string
+  ) {
+    if (!claimToken || typeof claimToken !== 'string') {
+      throw new AppError('Reward claim token is required', 400);
+    }
+
+    const trimmed = claimToken.trim();
+    if (!trimmed.startsWith('RC-')) {
+      throw new AppError('Invalid reward claim token format', 400);
+    }
+
+    const tokenHash = hashRewardClaimToken(trimmed);
+
+    const claim = await prisma.rewardClaim.findUnique({
+      where: { tokenHash },
+      include: {
+        branch: {
+          include: {
+            business: true,
+          },
+        },
+        program: {
+          include: {
+            milestones: {
+              where: { isEnabled: true },
+            },
+          },
+        },
+        customerProfile: {
+          include: {
+            customer: true,
+          },
+        },
+        milestone: true,
+      },
+    });
+
+    if (!claim) {
+      throw new AppError('Reward claim not found or invalid token', 404);
+    }
+
+    // Business authorization
+    if (claim.branch.businessId !== user.businessId) {
+      throw new AppError('Unauthorized: Reward claim belongs to another business', 403);
+    }
+
+    // Branch authorization for STAFF
+    if (user.role === UserRole.STAFF) {
+      const staff = await this.resolveStaffRecord(user);
+      if (claim.branchId !== staff?.branchId) {
+        throw new AppError('Forbidden: Staff cannot process claims for other branches', 403);
+      }
+    }
+
+    // Status check
+    if (claim.status === 'CONSUMED') {
+      throw new AppError('This reward claim has already been redeemed', 409);
+    }
+
+    if (claim.status === 'EXPIRED' || claim.expiresAt < new Date()) {
+      throw new AppError('This reward claim token has expired', 410);
+    }
+
+    if (claim.status !== 'PENDING') {
+      throw new AppError('Reward claim is not available for processing', 400);
+    }
+
+    // Milestone check
+    if (!claim.milestone || claim.milestone.rewardType === 'NONE') {
+      throw new AppError('Milestone does not have an attached reward', 400);
+    }
+
+    // Customer visit progress validation
+    const activeCycle = await prisma.loyaltyCycle.findFirst({
+      where: {
+        customerProfileId: claim.customerProfileId,
+        programId: claim.programId,
+        status: 'ACTIVE',
+      },
+      include: {
+        milestoneRewards: true,
+      },
+    });
+
+    const currentVisitCount = activeCycle ? activeCycle.visitCount : 0;
+    if (currentVisitCount + 1 !== claim.expectedVisitNumber) {
+      throw new AppError(
+        `Customer visit state has changed. Expected visit ${claim.expectedVisitNumber}, but customer is currently at visit ${currentVisitCount}.`,
+        409
+      );
+    }
+
+    // Reward not already claimed
+    if (
+      activeCycle &&
+      activeCycle.milestoneRewards.some((r) => r.milestoneId === claim.milestoneId)
+    ) {
+      throw new AppError('Reward for this milestone has already been claimed', 409);
+    }
+
+    const customer = claim.customerProfile.customer;
+
+    return {
+      claimId: claim.id,
+      customerName: customer.name || 'Valued Customer',
+      customerPhone: maskPhone(customer.phone),
+      expectedVisitNumber: claim.expectedVisitNumber,
+      cycleLength: claim.program.cycleLength,
+      rewardName: claim.milestone.rewardName || claim.milestone.rewardType.replace(/_/g, ' '),
+      rewardDescription: claim.milestone.rewardDescription,
+      rewardType: claim.milestone.rewardType,
+      rewardValue: claim.milestone.rewardValue ? claim.milestone.rewardValue.toString() : null,
+      branchName: claim.branch.name,
+      businessName: claim.branch.business.name,
+      expiresAt: claim.expiresAt,
+    };
+  }
+
+  /**
+   * Complete Reward Visit via ONE Atomic Transaction.
+   * Steps:
+   * 1. Create Visit: visitType = QUALIFYING, visitNumberInCycle = expectedVisitNumber.
+   * 2. Increment LoyaltyCycle.visitCount.
+   * 3. If this completes the cycle: mark cycle COMPLETED.
+   * 4. Create MilestoneReward using existing snapshot mechanism.
+   * 5. Immediately set MilestoneReward.status = REDEEMED.
+   * 6. Set redeemedAt, redeemedByStaffId.
+   * 7. Create another Visit: visitType = REWARD_REDEMPTION (analytics only, visitNumberInCycle = null).
+   * 8. Mark RewardClaim: status = CONSUMED, consumedAt, consumedByStaffId.
+   * 9. Commit. Rollback everything on failure.
+   */
+  static async confirmRewardClaim(
+    user: AuthenticatedUserContext,
+    claimToken: string
+  ) {
+    if (!claimToken || typeof claimToken !== 'string') {
+      throw new AppError('Reward claim token is required', 400);
+    }
+
+    const trimmed = claimToken.trim();
+    if (!trimmed.startsWith('RC-')) {
+      throw new AppError('Invalid reward claim token format', 400);
+    }
+
+    const tokenHash = hashRewardClaimToken(trimmed);
+
+    // Pre-transaction check of business & staff permissions
+    const claimPre = await prisma.rewardClaim.findUnique({
+      where: { tokenHash },
+      include: {
+        branch: true,
+        program: true,
+      },
+    });
+
+    if (!claimPre) {
+      throw new AppError('Reward claim not found or invalid token', 404);
+    }
+
+    if (claimPre.branch.businessId !== user.businessId) {
+      throw new AppError('Unauthorized: Claim belongs to another business', 403);
+    }
+
+    let operationalStaff = null;
+    if (user.role === UserRole.STAFF) {
+      operationalStaff = await this.resolveStaffRecord(user);
+      if (claimPre.branchId !== operationalStaff?.branchId) {
+        throw new AppError('Forbidden: Staff cannot confirm claims for other branches', 403);
+      }
+    } else {
+      operationalStaff = await this.resolveStaffRecord(user, claimPre.branchId);
+    }
+
+    if (!operationalStaff) {
+      throw new AppError('Failed to resolve operational staff context', 500);
+    }
+
+    const now = new Date();
+
+    return prisma.$transaction(async (tx) => {
+      // Step A: Atomic conditional claim consumption (prevents race / double consumption)
+      const claimUpdate = await tx.rewardClaim.updateMany({
+        where: {
+          id: claimPre.id,
+          status: 'PENDING',
+          expiresAt: { gt: now },
+        },
+        data: {
+          status: 'CONSUMED',
+          consumedAt: now,
+          consumedByStaffId: operationalStaff.id,
+        },
+      });
+
+      if (claimUpdate.count === 0) {
+        const current = await tx.rewardClaim.findUnique({
+          where: { id: claimPre.id },
+          select: { status: true, expiresAt: true },
+        });
+
+        if (current?.status === 'CONSUMED') {
+          throw new AppError('This reward claim has already been redeemed', 409);
+        }
+        if (current?.status === 'EXPIRED' || (current?.expiresAt && current.expiresAt <= now)) {
+          throw new AppError('This reward claim token has expired', 410);
+        }
+        throw new AppError('Reward claim is not available for processing', 409);
+      }
+
+      // Step B: Resolve active LoyaltyProgram for this branch
+      const activeProgram = await tx.loyaltyProgram.findFirst({
+        where: {
+          branchId: claimPre.branchId,
+          isActive: true,
+        },
+        include: {
+          milestones: {
+            where: { isEnabled: true },
+          },
+        },
+      });
+
+      if (!activeProgram) {
+        throw new AppError('No active loyalty program found for this branch', 422);
+      }
+
+      // Step C: Resolve or lazily create active LoyaltyCycle
+      let activeCycle = await tx.loyaltyCycle.findFirst({
+        where: {
+          customerProfileId: claimPre.customerProfileId,
+          programId: activeProgram.id,
+          status: 'ACTIVE',
+        },
+      });
+
+      if (!activeCycle) {
+        const lastCycle = await tx.loyaltyCycle.findFirst({
+          where: {
+            customerProfileId: claimPre.customerProfileId,
+            programId: activeProgram.id,
+          },
+          orderBy: { cycleNumber: 'desc' },
+        });
+
+        const nextCycleNumber = (lastCycle?.cycleNumber ?? 0) + 1;
+
+        try {
+          activeCycle = await tx.loyaltyCycle.create({
+            data: {
+              customerProfileId: claimPre.customerProfileId,
+              programId: activeProgram.id,
+              cycleNumber: nextCycleNumber,
+              visitCount: 0,
+              status: 'ACTIVE',
+              startedAt: now,
+            },
+          });
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === 'P2002'
+          ) {
+            activeCycle = await tx.loyaltyCycle.findFirst({
+              where: {
+                customerProfileId: claimPre.customerProfileId,
+                programId: activeProgram.id,
+                status: 'ACTIVE',
+              },
+            });
+            if (!activeCycle) throw error;
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      // Step D: Verify expected visit number & milestone
+      const newVisitCount = activeCycle.visitCount + 1;
+      if (newVisitCount !== claimPre.expectedVisitNumber) {
+        throw new AppError(
+          `Customer visit progress mismatch. Expected visit ${claimPre.expectedVisitNumber}, but customer is currently at visit ${activeCycle.visitCount}`,
+          409
+        );
+      }
+
+      const matchingMilestone = activeProgram.milestones.find(
+        (m) => m.id === claimPre.milestoneId && m.visitNumber === newVisitCount
+      );
+
+      if (!matchingMilestone || matchingMilestone.rewardType === 'NONE') {
+        throw new AppError('Milestone not found or has no attached reward', 400);
+      }
+
+      // Step E: Verify milestone reward not already created in this cycle
+      const existingReward = await tx.milestoneReward.findUnique({
+        where: {
+          loyaltyCycleId_milestoneId: {
+            loyaltyCycleId: activeCycle.id,
+            milestoneId: matchingMilestone.id,
+          },
+        },
+      });
+
+      if (existingReward) {
+        throw new AppError('Reward has already been created for this milestone in this cycle', 409);
+      }
+
+      // 1. Create Visit: visitType = QUALIFYING, visitNumberInCycle = expectedVisitNumber
+      const qualifyingVisit = await tx.visit.create({
+        data: {
+          loyaltyCycleId: activeCycle.id,
+          visitRequestId: null,
+          branchId: claimPre.branchId,
+          visitType: VisitType.QUALIFYING,
+          visitNumberInCycle: newVisitCount,
+          approvedByStaffId: operationalStaff.id,
+          createdAt: now,
+        },
+      });
+
+      // 2 & 3. Increment LoyaltyCycle.visitCount. If this completes the cycle: mark COMPLETED.
+      const isCycleCompleted = newVisitCount >= activeProgram.cycleLength;
+      await tx.loyaltyCycle.update({
+        where: { id: activeCycle.id },
+        data: {
+          visitCount: newVisitCount,
+          ...(isCycleCompleted ? { status: 'COMPLETED', completedAt: now } : {}),
+        },
+      });
+
+      // 4, 5, 6. Create MilestoneReward with snapshot mechanism and immediately set REDEEMED
+      const rewardId = crypto.randomUUID();
+      const milestoneReward = await tx.milestoneReward.create({
+        data: {
+          id: rewardId,
+          loyaltyCycleId: activeCycle.id,
+          milestoneId: matchingMilestone.id,
+          snapshotRewardType: matchingMilestone.rewardType,
+          snapshotRewardValue: matchingMilestone.rewardValue,
+          snapshotRewardName: matchingMilestone.rewardName,
+          snapshotRewardDescription: matchingMilestone.rewardDescription,
+          status: 'REDEEMED',
+          unlockedAt: now,
+          redeemedAt: now,
+          redeemedByStaffId: operationalStaff.id,
+        },
+      });
+
+      // 7. Create another Visit: visitType = REWARD_REDEMPTION (analytics only, visitNumberInCycle = null)
+      const redemptionVisit = await tx.visit.create({
+        data: {
+          loyaltyCycleId: activeCycle.id,
+          visitRequestId: null,
+          branchId: claimPre.branchId,
+          visitType: VisitType.REWARD_REDEMPTION,
+          visitNumberInCycle: null,
+          approvedByStaffId: operationalStaff.id,
+          createdAt: now,
+        },
+      });
+
+      // Link loyaltyCycleId on RewardClaim if needed
+      if (!claimPre.loyaltyCycleId) {
+        await tx.rewardClaim.update({
+          where: { id: claimPre.id },
+          data: { loyaltyCycleId: activeCycle.id },
+        });
+      }
+
+      const customerProfile = await tx.customerProfile.findUnique({
+        where: { id: claimPre.customerProfileId },
+        include: { customer: true },
+      });
+
+      return {
+        qualifyingVisitId: qualifyingVisit.id,
+        redemptionVisitId: redemptionVisit.id,
+        visitNumberInCycle: newVisitCount,
+        cycleNumber: activeCycle.cycleNumber,
+        cycleCompleted: isCycleCompleted,
+        reward: {
+          id: milestoneReward.id,
+          rewardName: milestoneReward.snapshotRewardName,
+          rewardType: milestoneReward.snapshotRewardType,
+          rewardValue: milestoneReward.snapshotRewardValue ? milestoneReward.snapshotRewardValue.toString() : null,
+          status: milestoneReward.status,
+          redeemedAt: milestoneReward.redeemedAt,
+        },
+        customer: {
+          id: customerProfile?.customer.id,
+          name: customerProfile?.customer.name,
+        },
+      };
+    });
   }
 }

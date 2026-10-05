@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Phone, KeyRound, ArrowRight, AlertCircle, Loader2, CheckCircle2, RefreshCw, Sparkles } from 'lucide-react';
+import { Phone, KeyRound, ArrowRight, AlertCircle, Loader2, CheckCircle2, RefreshCw } from 'lucide-react';
+import { AaoLogo, AaoMascot } from '../components/ui/AaoBrand';
 
 export const CustomerLogin: React.FC = () => {
   const { sendCustomerOtp, verifyCustomerOtp } = useAuth();
@@ -59,26 +60,15 @@ export const CustomerLogin: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FC] text-slate-900 flex flex-col justify-between relative selection:bg-indigo-100 selection:text-indigo-900 font-sans">
-      {/* Subtle Background Pattern */}
-      <div 
-        className="absolute inset-0 pointer-events-none bg-[radial-gradient(#E2E8F0_1px,transparent_1px)] [background-size:20px_20px] [mask-image:radial-gradient(ellipse_70%_50%_at_50%_0%,#000_60%,transparent_100%)] opacity-70"
-        aria-hidden="true" 
-      />
-
+    <div className="min-h-screen bg-[#F8FAFC] text-[#172033] flex flex-col justify-between relative selection:bg-[#FFD444]/30 selection:text-[#172033] font-sans">
       {/* Top Bar */}
-      <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur-md px-6 sm:px-10 py-4 flex items-center justify-between relative z-10">
+      <header className="border-b border-[#E5E7EB] bg-[#FFFFFF]/90 backdrop-blur-md px-6 sm:px-10 py-3.5 flex items-center justify-between relative z-10">
         <Link to="/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-[#FFD444] flex items-center justify-center text-[#172033] shadow-xs">
-            <Sparkles className="w-4 h-4 stroke-[2.5]" />
-          </div>
-          <span className="font-bold text-lg tracking-tight text-slate-900">
-            RetainPulse
-          </span>
+          <AaoLogo variant="full" size="sm" />
         </Link>
         <Link 
           to="/login"
-          className="text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+          className="text-xs sm:text-sm font-bold text-[#667085] hover:text-[#172033] transition-colors"
         >
           Business Portal &rarr;
         </Link>
@@ -86,14 +76,14 @@ export const CustomerLogin: React.FC = () => {
 
       {/* Main Container */}
       <main className="flex-1 flex items-center justify-center p-4 sm:p-6 relative z-10">
-        <div className="w-full max-w-md bg-white border border-slate-200/90 rounded-2xl shadow-xs p-7 sm:p-8">
-          <div className="text-center mb-7">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#FFD444]/20 border border-[#FFD444]/40 text-[#172033] mb-4 shadow-xs">
-              <Phone className="w-5 h-5 stroke-[2.2]" />
+        <div className="w-full max-w-md bg-[#FFFFFF] border border-[#E5E7EB] rounded-3xl shadow-sm p-7 sm:p-8">
+          <div className="text-center mb-6">
+            <div className="mb-3 flex justify-center">
+              <AaoMascot mood="hello" size={72} />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Customer Rewards</h1>
-            <p className="text-sm text-slate-500 mt-1.5">
-              {step === 'PHONE' ? 'Enter your phone number to sign in or register' : `Enter the 6-digit OTP code sent to ${phone}`}
+            <h1 className="text-2xl font-black text-[#172033] tracking-tight">Customer Sign In</h1>
+            <p className="text-xs text-[#667085] mt-1">
+              {step === 'PHONE' ? 'Scan. Earn. Come Again. Enter your phone to get started.' : `Enter the 6-digit OTP code sent to ${phone}`}
             </p>
           </div>
 
@@ -212,10 +202,10 @@ export const CustomerLogin: React.FC = () => {
             </form>
           )}
 
-          <div className="mt-7 pt-5 border-t border-slate-100 text-center">
-            <p className="text-xs text-slate-500">
+          <div className="mt-7 pt-5 border-t border-[#E5E7EB] text-center">
+            <p className="text-xs text-[#667085]">
               Business Owner or Staff?{' '}
-              <Link to="/login" className="text-indigo-600 hover:text-indigo-700 font-medium transition-colors">
+              <Link to="/login" className="text-[#172033] hover:underline font-bold transition-colors">
                 Sign in to Business Portal
               </Link>
             </p>
@@ -224,8 +214,8 @@ export const CustomerLogin: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-200/70 bg-white py-5 text-center text-xs text-slate-400">
-        RetainPulse • Fast, Secure Customer OTP Access
+      <footer className="border-t border-[#E5E7EB] bg-[#FFFFFF] py-4 text-center text-xs text-[#667085]">
+        AAO • Scan. Earn. Come Again.
       </footer>
     </div>
   );

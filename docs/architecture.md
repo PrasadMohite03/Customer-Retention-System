@@ -555,13 +555,22 @@ Note: milestones with `rewardType: NONE` have no reward state. They are not repr
   - Customer presents the opaque reward QR code or code on their mobile pass (`[ Show Reward ]`).
   - QR payload contains exclusively the opaque token `RP-XXXX-XXXX-XXXX` (no URLs, internal DB IDs, customer/branch/business IDs).
   - Staff or Owner taps **[ Scan Reward ]** on their dashboard, scanning via camera or typing the code manually.
-- **Validation & Redemption:**
+- **Validation & Redemption (Unlocked Rewards):**
   - Read-only validation (`POST /api/staff/rewards/validate`) verifies token hash, branch scope, active status, and returns masked customer and snapshot reward info without mutating state.
   - Redemption (`POST /api/staff/rewards/redeem-by-token`) atomically executes conditional update `status: UNLOCKED -> REDEEMED` AND creates a `Visit` record (`visitType = REWARD_REDEMPTION`, `visitRequestId = null`, `visitNumberInCycle = null`, `approvedByStaffId = staff.id`).
   - Does NOT increment `LoyaltyCycle.visitCount` and does NOT start a new cycle.
   - Concurrent attempts fail with `409 Conflict` (and no duplicate Visit is created).
+- **Claim Reward Visit Flow (Atomic Qualifying Visit + Redemption):**
+  - Customer taps **[ Claim Reward Visit → ]** on their pass when the upcoming visit has a configured reward milestone.
+  - Generates a short-lived claim token (`RC-XXXX-XXXX-XXXX`) with a 15-minute TTL; raw token is returned for client QR generation while its SHA-256 hash is saved in `RewardClaim.tokenHash` (`@unique`).
+  - Does NOT create a `VisitRequest`.
+  - **Unified Scanner Dispatcher:**
+    - The staff scanner component inspects the token prefix:
+      - Prefix `RC-` (Claim Token) → dispatches to `POST /api/staff/reward-claims/validate` and `POST /api/staff/reward-claims/confirm`.
+      - Prefix `RP-` (Unlocked Reward) → dispatches to `POST /api/staff/rewards/validate` and `POST /api/staff/rewards/redeem-by-token`.
+  - Confirmation atomically consumes the claim, logs the `QUALIFYING` visit (`visitNumberInCycle = expectedVisitNumber`), increments visit count (and completes cycle if terminal), creates the snapshot `MilestoneReward` as `REDEEMED`, and creates an analytics `REWARD_REDEMPTION` visit.
 - **Operational Actor Recording:**
-  - Staff redemptions record the authenticated staff member's `Staff.id` in `redeemedByStaffId`.
+  - Staff redemptions record the authenticated staff member's `Staff.id` in `redeemedByStaffId` / `consumedByStaffId`.
   - Owner redemptions resolve/ensure an operational `Staff` record linked to the Owner User via `resolveStaffRecord()`, preserving foreign key integrity without altering schema constraints.
 - **Cycle association:** Every `MilestoneReward` is tied to the `LoyaltyCycle` in which it was earned. If a customer is in Cycle 2 and previously had a reward in Cycle 1, those are separate `MilestoneReward` records. History is never overwritten.
 
@@ -800,6 +809,29 @@ The per-customer, per-cycle record of a reward unlock.
 
 ---
 
+#### `RewardClaim`
+Short-lived claim token for the Claim Reward Visit flow (coinciding qualifying visit and reward milestone).
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID | Primary key |
+| `customerProfileId` | UUID FK → `CustomerProfile.id` | The claiming customer profile |
+| `loyaltyCycleId` | UUID FK → `LoyaltyCycle.id` | Active cycle (nullable if uninitialized) |
+| `programId` | UUID FK → `LoyaltyProgram.id` | Scoped loyalty program |
+| `branchId` | UUID FK → `Branch.id` | Scoped physical branch |
+| `milestoneId` | UUID FK → `Milestone.id` | Scoped reward milestone |
+| `expectedVisitNumber` | Integer | Visit number fulfilled by this claim |
+| `tokenHash` | String | Unique SHA-256 hash of raw token (`RC-XXXX-XXXX-XXXX`) |
+| `status` | Enum (`PENDING`, `CONSUMED`, `EXPIRED`) | Claim status |
+| `expiresAt` | DateTime | 15-minute expiration timestamp |
+| `consumedAt` | DateTime | Null until confirmed |
+| `consumedByStaffId` | UUID FK → `Staff.id` | Null until confirmed |
+
+**Unique constraint:** `tokenHash` — fast deterministic lookup of claim token.  
+**Index:** `customerProfileId`, `branchId`, `(branchId, status)`, `tokenHash`, `expiresAt`.
+
+---
+
 ### General Database Rules
 
 - All primary keys are UUIDs.
@@ -956,6 +988,18 @@ Visits are created exclusively by the system:
 | Get reward redemption history | Yes | OWNER |
 
 Redemption is branch- and business-isolated. Raw redemption tokens (`RP-XXXX-XXXX-XXXX`) are never stored in the database; only SHA-256 hashes are persisted and indexed.
+
+---
+
+### Reward Claims (`/api/customer/reward-claims` & `/api/staff/reward-claims`)
+
+| Responsibility | Auth Required | Role |
+|---|---|---|
+| Create claim token for reward-milestone visit | Yes | CUSTOMER (`POST /api/customer/reward-claims`) |
+| Validate claim token (read-only) | Yes | OWNER, STAFF (`POST /api/staff/reward-claims/validate`) |
+| Confirm reward visit & claim (atomic mutation) | Yes | OWNER, STAFF (`POST /api/staff/reward-claims/confirm`) |
+
+Claim tokens (`RC-XXXX-XXXX-XXXX`) carry a strict 15-minute TTL. The confirmation endpoint executes an atomic single transaction creating the qualifying visit, advancing the cycle, and redeeming the snapshotted milestone reward.
 
 ---
 

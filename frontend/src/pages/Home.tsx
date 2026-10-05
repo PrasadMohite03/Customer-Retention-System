@@ -1,7 +1,8 @@
 import React from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Phone, ArrowRight, Sparkles, Building2, CheckCircle2 } from 'lucide-react';
+import { Phone, ArrowRight, Building2, CheckCircle2 } from 'lucide-react';
+import { AaoLogo, AaoMascot } from '../components/ui/AaoBrand';
 
 const Home: React.FC = () => {
   const { user, isLoading } = useAuth();
@@ -18,34 +19,23 @@ const Home: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FC] text-slate-900 flex flex-col justify-between relative selection:bg-indigo-100 selection:text-indigo-900 font-sans">
-      {/* Subtle Background Pattern */}
-      <div 
-        className="absolute inset-0 pointer-events-none bg-[radial-gradient(#E2E8F0_1px,transparent_1px)] [background-size:20px_20px] [mask-image:radial-gradient(ellipse_70%_50%_at_50%_0%,#000_60%,transparent_100%)] opacity-70"
-        aria-hidden="true" 
-      />
-
+    <div className="min-h-screen bg-[#F8FAFC] text-[#172033] flex flex-col justify-between relative selection:bg-[#FFD444]/30 selection:text-[#172033] font-sans">
       {/* Navigation Header */}
-      <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/85 backdrop-blur-md px-6 sm:px-10 py-4 flex items-center justify-between">
+      <header className="sticky top-0 z-30 border-b border-[#E5E7EB] bg-[#FFFFFF]/90 backdrop-blur-md px-6 sm:px-10 py-3.5 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-sm">
-            <Sparkles className="w-4 h-4" />
-          </div>
-          <span className="font-semibold text-lg tracking-tight text-slate-900">
-            RetainPulse
-          </span>
+          <AaoLogo variant="full" size="sm" />
         </div>
 
         <nav className="flex items-center gap-3">
           <Link
             to="/customer/login"
-            className="px-3.5 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 transition-colors"
+            className="px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold text-[#172033] hover:bg-slate-100 transition-colors"
           >
             Customer Pass
           </Link>
           <Link
             to="/login"
-            className="px-3.5 py-1.5 rounded-lg text-sm font-medium text-indigo-600 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200/60 transition-colors"
+            className="px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold text-[#172033] bg-[#FFD444] hover:bg-[#F4EB6C] shadow-xs transition-colors"
           >
             Business Sign In
           </Link>
@@ -53,109 +43,113 @@ const Home: React.FC = () => {
       </header>
 
       {/* Hero Section */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-6 sm:px-8 pt-12 pb-16 flex flex-col items-center justify-center text-center relative z-10">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-6 sm:px-8 pt-10 pb-16 flex flex-col items-center justify-center text-center relative z-10">
+        {/* Mascot Banner Moment */}
+        <div className="mb-4">
+          <AaoMascot mood="hello" size={90} className="mx-auto" />
+        </div>
+
         {/* Pill Badge */}
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-slate-200/90 shadow-xs text-slate-700 text-xs font-medium mb-6">
-          <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
-          <span>Milestone-Based Digital Loyalty Platform</span>
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FFFFFF] border border-[#E5E7EB] shadow-xs text-[#172033] text-xs font-bold mb-4">
+          <span className="w-2 h-2 rounded-full bg-[#FFD444]" />
+          <span>Scan. Earn. Come Again.</span>
         </div>
 
         {/* Hero Title */}
-        <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 max-w-3xl leading-[1.12] mb-5">
-          Turn Every Visit Into a{' '}
-          <span className="text-indigo-600">Lasting Relationship</span>
+        <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-[#172033] max-w-3xl leading-[1.12] mb-4">
+          Bring Customers Back With Simple Loyalty & Rewards
         </h1>
 
         {/* Hero Description */}
-        <p className="text-base sm:text-lg text-slate-600 max-w-2xl leading-relaxed mb-10">
-          Streamlined QR stamp tracking, automated milestone rewards, and instant OTP verification built for cafes, salons, gyms, and retail stores.
+        <p className="text-base sm:text-lg text-[#667085] max-w-2xl leading-relaxed mb-8">
+          AAO helps local businesses create friendly digital punch cards, automated milestone rewards, and instant OTP check-ins that customers love.
         </p>
 
-        {/* Feature Highlights Pills */}
-        <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-medium text-slate-500 mb-12">
+        {/* Feature Highlights */}
+        <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-bold text-[#667085] mb-10">
           <span className="inline-flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
-            No hardware or app downloads
+            <CheckCircle2 className="w-3.5 h-3.5 text-[#16A34A]" />
+            No apps to download
           </span>
           <span className="hidden sm:inline text-slate-300">•</span>
           <span className="inline-flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
-            Instant 6-digit phone OTP
+            <CheckCircle2 className="w-3.5 h-3.5 text-[#16A34A]" />
+            Instant mobile phone check-in
           </span>
           <span className="hidden sm:inline text-slate-300">•</span>
           <span className="inline-flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
-            Branch & multi-tenant isolation
+            <CheckCircle2 className="w-3.5 h-3.5 text-[#16A34A]" />
+            Real scannable store QR codes
           </span>
         </div>
 
         {/* Action Entry Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-3xl text-left">
-          {/* Business Card */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-7 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between group">
+          {/* Customer Card */}
+          <div className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-3xl p-6 sm:p-7 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between group">
             <div>
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-4 group-hover:bg-indigo-100/70 transition-colors">
-                <Building2 className="w-5 h-5" />
+              <div className="w-12 h-12 rounded-2xl bg-[#FFD444]/20 border border-[#FFD444]/40 flex items-center justify-center text-[#172033] mb-4">
+                <Phone className="w-5 h-5 stroke-[2.2]" />
               </div>
 
               <div className="flex items-center justify-between mb-1.5">
-                <h2 className="text-lg font-semibold text-slate-900">
-                  Business Owners & Staff
+                <h2 className="text-lg font-bold text-[#172033]">
+                  Customers & Diners
                 </h2>
-                <span className="text-[11px] font-medium tracking-wide uppercase px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">
-                  Portal
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-[#EAFBEF] text-[#0E7A36] border border-[#55E07E]/30">
+                  Customer
                 </span>
               </div>
 
-              <p className="text-sm text-slate-500 leading-relaxed mb-6">
-                Create custom loyalty cycles, print branch QR codes, invite staff members, and track customer redemption history.
+              <p className="text-xs text-[#667085] leading-relaxed mb-6">
+                Check in at your favorite stores, collect stamps on your digital loyalty card, and unlock vouchers.
               </p>
             </div>
 
-            <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-stretch gap-2.5">
+            <div className="pt-4 border-t border-[#E5E7EB]">
               <Link
-                to="/register"
-                className="flex-1 inline-flex items-center justify-center py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium shadow-xs transition-colors"
+                to="/customer/login"
+                className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#FFD444] hover:bg-[#F4EB6C] text-[#172033] text-xs font-black shadow-xs transition-colors"
               >
-                Register Business
-              </Link>
-              <Link
-                to="/login"
-                className="flex-1 inline-flex items-center justify-center py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-sm font-medium transition-colors"
-              >
-                Sign In
+                <span>Customer Phone Login</span>
+                <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
           </div>
 
-          {/* Customer Card */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-7 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between group">
+          {/* Business Card */}
+          <div className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-3xl p-6 sm:p-7 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between group">
             <div>
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-4 group-hover:bg-indigo-100/70 transition-colors">
-                <Phone className="w-5 h-5" />
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center text-[#172033] mb-4">
+                <Building2 className="w-5 h-5" />
               </div>
 
               <div className="flex items-center justify-between mb-1.5">
-                <h2 className="text-lg font-semibold text-slate-900">
-                  Customers & Diners
+                <h2 className="text-lg font-bold text-[#172033]">
+                  Store Owners & Staff
                 </h2>
-                <span className="text-[11px] font-medium tracking-wide uppercase px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">
-                  Member
+                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-[#667085] border border-slate-200">
+                  Business
                 </span>
               </div>
 
-              <p className="text-sm text-slate-500 leading-relaxed mb-6">
-                Log in via your phone number to view collected stamps, unlocked discounts, and redeem rewards during your visits.
+              <p className="text-xs text-[#667085] leading-relaxed mb-6">
+                Set up your loyalty program, print branch QR standees, approve visits, and validate customer reward vouchers.
               </p>
             </div>
 
-            <div className="pt-4 border-t border-slate-100">
+            <div className="pt-4 border-t border-[#E5E7EB] flex flex-col sm:flex-row items-stretch gap-2.5">
               <Link
-                to="/customer/login"
-                className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium shadow-xs transition-colors"
+                to="/register"
+                className="flex-1 inline-flex items-center justify-center py-2.5 px-4 rounded-xl bg-[#172033] hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-colors"
               >
-                <span>Customer OTP Login</span>
-                <ArrowRight className="w-4 h-4" />
+                Register Store
+              </Link>
+              <Link
+                to="/login"
+                className="flex-1 inline-flex items-center justify-center py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 border border-[#E5E7EB] text-[#172033] text-xs font-bold transition-colors"
+              >
+                Sign In
               </Link>
             </div>
           </div>
@@ -163,10 +157,10 @@ const Home: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-200/70 bg-white py-6 text-center text-xs text-slate-500">
+      <footer className="border-t border-[#E5E7EB] bg-[#FFFFFF] py-5 text-center text-xs text-[#667085]">
         <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>Customer Retention SaaS System</span>
-          <span className="text-slate-400">Secure, multi-tenant digital loyalty engine</span>
+          <span className="font-bold text-[#172033]">AAO — Simple Loyalty & Rewards</span>
+          <span>Scan. Earn. Come Again.</span>
         </div>
       </footer>
     </div>

@@ -53,6 +53,34 @@ export async function createVisitRequestHandler(
   }
 }
 
+export async function createRewardClaimHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const customerId = req.customer?.customerId;
+    if (!customerId) {
+      throw new AppError('Unauthorized: Customer context missing', 401);
+    }
+
+    const { qrToken } = req.body;
+    if (!qrToken || typeof qrToken !== 'string') {
+      throw new AppError('qrToken is required in request body', 400);
+    }
+
+    const result = await CustomerLoyaltyService.createRewardClaim(customerId, qrToken);
+
+    return res.status(201).json({
+      status: 'success',
+      message: 'Reward claim token generated successfully',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getCustomerHistoryHandler(
   req: Request,
   res: Response,

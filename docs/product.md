@@ -212,7 +212,7 @@ After Visit 7 is approved:
 
 ---
 
-### 6.3 Staff Approval Journey
+### 6.3 Staff Approval Journey (Normal Stamp)
 
 1. Staff member logs into the staff dashboard using their staff credentials.
 2. Staff sees a list of pending visit/stamp requests from customers.
@@ -227,6 +227,44 @@ After Visit 7 is approved:
 6. The customer's cumulative visit count is incremented by 1.
 7. The system checks whether the new visit count matches any enabled milestone in the program.
 8. If a matching milestone has a reward, that reward is automatically unlocked for the customer.
+
+---
+
+### 6.4 Reward Qualifying Visit Journey ("Claim Reward Visit")
+
+When a customer's upcoming qualifying visit coincides with an attached reward milestone (e.g., Visit 4 of 4 where Visit 4 earns a Free Item):
+
+1. Customer opens their mobile Loyalty Pass at the store.
+2. Instead of "Request a Stamp", the customer sees a reward-focused call to action: **[ Claim Reward Visit → ]** with supporting copy: *"Complete your visit to unlock & claim [Reward Name]"*.
+3. Customer taps the button to generate a dynamic, short-lived claim token (`RC-XXXX-XXXX-XXXX`) with a 15-minute TTL.
+4. The loyalty pass displays an animated Claim Reward QR modal.
+5. Staff or Owner taps **[ Scan Code ]** on their dashboard and points their device camera at the customer's claim QR (or enters the uppercase code manually).
+6. Staff scanner immediately validates the claim token and presents a verification dialog displaying:
+   - Customer name and masked phone number
+   - Upcoming visit number (e.g., Visit 4 of 4)
+   - Snapshotted reward name, description, and value
+7. Staff taps **"Confirm & Redeem"**.
+8. The backend executes **one atomic transaction**:
+   - Consumes the claim token (`status = CONSUMED`).
+   - Records the qualifying visit (`visitType = QUALIFYING`, `visitNumberInCycle = 4`).
+   - Increments customer visit count to 4 (and completes the cycle if terminal visit).
+   - Generates the milestone reward record and immediately marks it `REDEEMED`.
+   - Records an analytics footfall visit (`visitType = REWARD_REDEMPTION`, `visitNumberInCycle = null`).
+9. Customer's screen instantly updates to a celebration state ("Visit Recorded & Reward Redeemed!").
+10. If the redeemed reward was terminal, the loyalty pass transitions to the fresh upcoming cycle state (e.g., `0 of 4 visits`), ready for the next cycle to start on their subsequent qualifying visit.
+
+---
+
+### 6.5 Unlocked Reward Redemption Journey
+
+For intermediate or terminal rewards that were previously unlocked and remain unredeemed:
+
+1. Customer taps **[ Show Reward ]** on their mobile Loyalty Pass under their rewards section.
+2. Loyalty Pass presents a dynamic redemption QR code and uppercase redemption token (`RP-XXXX-XXXX-XXXX`).
+3. Staff scans the QR or types the redemption code in the staff scanner modal.
+4. Staff confirms redemption at checkout.
+5. The backend marks the reward `REDEEMED` and creates an analytics visit (`visitType = REWARD_REDEMPTION`, `visitNumberInCycle = null`).
+6. The customer's loyalty cycle progress is NOT modified (stamps are neither added nor reset).
 
 ---
 
@@ -334,22 +372,25 @@ The owner dashboard provides a basic overview of loyalty activity.
 - On first visit: customer creates a basic profile (name, phone number)
 - On repeat visits: customer is recognized by their phone number
 
-### 9.3 Loyalty Program View
-- Program name
-- Customer's current cumulative visit count
-- List of all enabled milestones with:
-  - Visit number
-  - Reward type and reward name
-  - Status: upcoming / unlocked / redeemed
-- Next upcoming milestone highlighted (e.g., "1 more visit until Free Coffee")
-- Visual progress indicator showing progress toward the next milestone
+### 9.3 Loyalty Program View & Punch Card
+- Program name and branch location
+- Customer's current cumulative visit count (e.g., `3 of 4 visits`)
+- **Exact Slot Punch Card:** Displays exactly `cycleLength` visual slots (e.g., 4 slots for a 4-visit program). There is NO separate 5th reward-redemption slot:
+  - Each slot corresponds to one qualifying visit.
+  - A milestone reward attaches directly to its configured visit number with a subtle gift badge (`[ 🎁 ]`).
+  - Slots display clean numbers/gifts when upcoming, and green checkmarks (`[ ✓ ]`) when completed.
+- Next upcoming milestone highlighted with visits remaining (e.g., "1 more visit until Free Coffee").
 
-### 9.4 Visit Request
-- Customer taps a button to request a visit
-- Request is sent to the staff dashboard as a pending item
-- Customer sees a "pending" status while awaiting staff approval
-- On approval: cumulative visit count increases; any newly triggered milestone rewards are automatically unlocked and displayed
-- On rejection: customer is informed the request was rejected
+### 9.4 Visit Actions (Dual Flows)
+The loyalty pass dynamically adapts its primary action depending on whether the upcoming visit carries an attached reward:
+1. **Normal Qualifying Visit (No attached reward on next visit):**
+   - Customer taps **[ Request a Stamp ]**.
+   - Generates a pending `VisitRequest`.
+   - Customer sees "Pending Approval" while staff verifies presence and approves from the staff queue.
+2. **Reward Qualifying Visit (Attached reward on next visit):**
+   - Customer taps **[ Claim Reward Visit → ]**.
+   - Generates an opaque, 15-minute claim token (`RC-XXXX-XXXX-XXXX`) and renders the animated Claim QR modal.
+   - Staff scans the QR with the staff scanner and confirms in one step, atomically issuing the qualifying stamp and redeeming the earned reward.
 
 ### 9.5 Reward States
 
@@ -363,11 +404,11 @@ Each milestone reward exists in one of the following states:
 
 Important: the cycle resets **only** when the customer reaches the final configured milestone. Intermediate milestone rewards are unlocked and redeemed independently without resetting the cycle.
 
-### 9.6 Loyalty History & Reward Presentation
-- Customer can view their past visits at the business.
-- Customer can view past rewards (unlocked and redeemed).
-- For `UNLOCKED` rewards, customer can tap **[ Show Reward ]** to display an opaque Reward QR code and formatted code (`RP-XXXX-XXXX-XXXX`) along with expiration and usage instructions. Customers cannot self-redeem.
+### 9.6 Loyalty History & Post-Redemption Presentation
+- Customer can view their past visits and redeemed rewards at the business.
+- For `UNLOCKED` rewards, customer can tap **[ Show Reward ]** to display an opaque Reward QR code and formatted code (`RP-XXXX-XXXX-XXXX`). Customers cannot self-redeem.
 - For `REDEEMED` rewards, the pass displays `✓ Reward Name / REDEEMED / Used on <date>` and the QR code is no longer returned or accessible.
+- **Post-Redemption Flow:** When the terminal reward is redeemed, the loyalty pass displays a fresh `0 of N visits` presentation. A new database cycle is not created on view, but lazily created when the customer's next qualifying visit is recorded.
 
 ### 9.7 Multi-Business Support (Conceptual)
 - A customer is not permanently tied to a single business.

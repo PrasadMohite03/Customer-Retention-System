@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { customerService } from '../../services/customerService';
 import type { ExploreBusinessItem } from '../../services/customerService';
 import { BusinessLoyaltyCardModal } from '../../components/customer/BusinessLoyaltyCardModal';
+import { AaoMascot } from '../../components/ui/AaoBrand';
 import {
   Search,
   MapPin,
@@ -112,14 +113,17 @@ export const CustomerExplore: React.FC = () => {
     <div className="flex-1 flex flex-col p-4 sm:p-5 space-y-3.5 bg-[#F8FAFC]">
       {/* 1. Header Hierarchy */}
       <div>
-        <span className="text-[10px] font-bold uppercase tracking-wider text-[#667085] block mb-0.5">
-          DISCOVER REWARDS
-        </span>
+        <div className="flex items-center gap-2 mb-1">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#FFD444]" />
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[#172033]">
+            DISCOVER REWARDS
+          </span>
+        </div>
         <h1 className="text-xl font-black tracking-tight text-[#172033]">
           Explore
         </h1>
         <p className="text-xs text-[#667085] mt-0.5">
-          Discover local businesses and their loyalty rewards.
+          Discover local businesses and start earning rewards with AAO.
         </p>
       </div>
 
@@ -147,7 +151,7 @@ export const CustomerExplore: React.FC = () => {
         )}
       </div>
 
-      {/* 3. Category Filter Chips (Horizontal scroll, no visible scrollbar line) */}
+      {/* 3. Category Filter Chips */}
       <div className="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
         {CATEGORIES.map((cat) => {
           const Icon = cat.icon;
@@ -210,13 +214,15 @@ export const CustomerExplore: React.FC = () => {
           </button>
         </div>
       ) : businesses.length === 0 ? (
-        /* Empty State */
-        <div className="bg-[#FFFFFF] rounded-2xl border border-[#E5E7EB] p-8 text-center space-y-2 shadow-xs my-2">
-          <Store className="w-8 h-8 text-slate-300 mx-auto" />
-          <h4 className="text-sm font-bold text-[#172033]">Nothing found</h4>
-          <p className="text-xs text-[#667085] max-w-xs mx-auto">
-            Try a different search or category.
-          </p>
+        /* Empty State with Mascot */
+        <div className="bg-[#FFFFFF] rounded-2xl border border-[#E5E7EB] p-8 text-center space-y-3 shadow-xs my-2">
+          <AaoMascot mood="hello" size={68} className="mx-auto" />
+          <div>
+            <h4 className="text-sm font-black text-[#172033]">No businesses found</h4>
+            <p className="text-xs text-[#667085] max-w-xs mx-auto mt-0.5 leading-relaxed">
+              Try searching with another keyword or explore a different category.
+            </p>
+          </div>
           {(searchQuery || selectedCategory !== 'ALL') && (
             <button
               onClick={() => {
@@ -224,7 +230,7 @@ export const CustomerExplore: React.FC = () => {
                 setSelectedCategory('ALL');
                 setPage(1);
               }}
-              className="mt-2 text-xs font-bold text-[#006199] hover:underline cursor-pointer"
+              className="mt-1 px-3.5 py-1.5 rounded-xl bg-[#F8FAFC] border border-[#E5E7EB] text-xs font-bold text-[#172033] hover:bg-slate-100 transition-colors cursor-pointer inline-block"
             >
               Clear filters
             </button>
@@ -237,13 +243,21 @@ export const CustomerExplore: React.FC = () => {
             const program = business.program;
             const branch = business.branch;
             const milestones = program?.milestones || [];
-            const primaryMilestone = milestones[milestones.length - 1] || milestones[0];
+            const rewardMilestones = milestones.filter(
+              (m) => m.rewardType && m.rewardType !== 'NONE'
+            );
+            const primaryMilestone = rewardMilestones[rewardMilestones.length - 1] || rewardMilestones[0];
 
-            const rewardText = primaryMilestone
-              ? `${primaryMilestone.rewardName || primaryMilestone.rewardType.replace(/_/g, ' ')} after ${primaryMilestone.visitNumber} visits`
-              : program
-              ? `Loyalty reward after ${program.cycleLength} visits`
-              : null;
+            let rewardText: string | null = null;
+            if (rewardMilestones.length > 1) {
+              const finalReward = rewardMilestones[rewardMilestones.length - 1];
+              const finalName = finalReward.rewardName || finalReward.rewardType.replace(/_/g, ' ');
+              rewardText = `${rewardMilestones.length} rewards: ${finalName} & more`;
+            } else if (primaryMilestone) {
+              rewardText = `${primaryMilestone.rewardName || primaryMilestone.rewardType.replace(/_/g, ' ')} after ${primaryMilestone.visitNumber} visits`;
+            } else if (program) {
+              rewardText = `Loyalty reward after ${program.cycleLength} visits`;
+            }
 
             return (
               <div
@@ -266,7 +280,7 @@ export const CustomerExplore: React.FC = () => {
                       <Store className="w-5 h-5 stroke-[2]" />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="font-bold text-sm text-[#172033] group-hover:text-[#006199] transition-colors leading-tight truncate">
+                      <h3 className="font-bold text-sm text-[#172033] leading-tight truncate">
                         {business.name}
                       </h3>
                       <span className="text-[11px] font-semibold text-[#667085] block mt-0.5">
@@ -277,7 +291,7 @@ export const CustomerExplore: React.FC = () => {
 
                   {/* Enrollment status tag */}
                   {business.isEnrolled ? (
-                    <span className="shrink-0 px-2 py-0.5 rounded-full bg-[#006199]/10 text-[#006199] font-bold text-[10px] border border-[#006199]/20">
+                    <span className="shrink-0 px-2.5 py-0.5 rounded-full bg-[#EAFBEF] text-[#0E7A36] font-extrabold text-[10px] border border-[#55E07E]/30">
                       Enrolled
                     </span>
                   ) : (
@@ -301,16 +315,16 @@ export const CustomerExplore: React.FC = () => {
                 {/* Reward Highlight & CTA */}
                 <div className="pt-2.5 border-t border-[#E5E7EB] flex items-center justify-between gap-2">
                   {rewardText ? (
-                    <div className="flex items-center gap-1.5 text-xs text-[#006199] font-bold min-w-0">
-                      <Gift className="w-3.5 h-3.5 shrink-0 text-[#006199]" />
+                    <div className="flex items-center gap-1.5 text-xs text-[#0E7A36] font-bold min-w-0">
+                      <Gift className="w-3.5 h-3.5 shrink-0 text-[#16A34A]" />
                       <span className="truncate">{rewardText}</span>
                     </div>
                   ) : (
                     <span className="text-xs text-[#667085]">Loyalty program available</span>
                   )}
 
-                  <span className="shrink-0 text-xs font-bold text-[#172033] group-hover:text-[#006199] flex items-center gap-1">
-                    <span>View Program</span>
+                  <span className="shrink-0 text-xs font-bold text-[#172033] group-hover:text-[#000000] flex items-center gap-1">
+                    <span>View Pass</span>
                     <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
                   </span>
                 </div>

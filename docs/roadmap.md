@@ -48,10 +48,16 @@ All core components of the loyalty loop, multi-tenancy, authentication, customer
 ### Customer QR & Visit Flow
 - [x] **Public Branch QR Resolution:** Zero internal ID leakage; returns sanitized branch and active program metadata.
 - [x] **Customer Loyalty Pass:** Mobile-first loyalty pass rendering real-time stamp progress.
-- [x] **5-Slot Customer Punch Card UI:** Intuitive visual representation (`cycleLength + 1`) showing 4 qualifying stamps + 1 reward redemption slot (`4 of 5` before redemption, `5 of 5` after redemption).
-- [x] **Visit Request Flow:** Customer stamp requests with single-pending-request concurrency protection per branch.
+- [x] **Exact-Slot Customer Punch Card UI:** Clean visual representation showing exactly `cycleLength` qualifying stamp slots (e.g., `4 of 4 visits`), attaching reward milestone indicators directly to their matching visit numbers without an artificial 5th slot.
+- [x] **Visit Request Flow:** Customer stamp requests for normal visits with single-pending-request concurrency protection per branch.
 - [x] **Unified Staff Dashboard:** Real-time queue for pending visit requests and unlocked customer rewards with search and filtering.
 - [x] **Atomic Visit Approval & Claiming:** Thread-safe conditional approval transaction preventing duplicate stamps under concurrent staff actions.
+
+### Claim Reward Visit Flow (Atomic Milestone Redemption)
+- [x] **Short-Lived Claim Tokens:** 96-bit high-entropy token (`RC-XXXX-XXXX-XXXX`) with 15-minute TTL; raw token never stored in database; indexed SHA-256 hash lookup.
+- [x] **Reward-Focused Pass CTA:** Dynamic CTA switching to "Claim Reward Visit →" when the customer's upcoming visit carries an attached reward milestone.
+- [x] **Unified Staff Scanner Dispatcher:** Auto-dispatches based on token prefix (`RC-` for reward claims, `RP-` for unlocked rewards) supporting camera scanning and manual code entry.
+- [x] **Single-Transaction Atomic Confirmation:** Consumes claim, records qualifying visit, increments cycle progress, unlocks and redeems milestone reward, and records footfall visit in one atomic database operation.
 
 ### Reward QR & Physical Redemption Architecture
 - [x] **Cryptographic Redemption Tokens:** 96-bit high-entropy token (`RP-XXXX-XXXX-XXXX`); raw token never stored in database; indexed SHA-256 hash lookup.

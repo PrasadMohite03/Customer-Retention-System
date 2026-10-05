@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import { customerService } from '../../services/customerService';
-import type { PublicQrData, CustomerLoyaltyData, CustomerRewardItem } from '../../services/customerService';
+import type {
+  CustomerRewardItem,
+  RewardClaimData,
+} from '../../services/customerService';
 import {
   Phone,
   KeyRound,
   CheckCircle2,
-  Clock,
   Gift,
   ArrowRight,
   ArrowLeft,
@@ -24,8 +27,11 @@ import {
   Star,
   History,
   Trophy,
+  Sparkles,
 } from 'lucide-react';
 import { RewardQrModal } from '../../components/customer/RewardQrModal';
+import { ClaimRewardQrModal } from '../../components/customer/ClaimRewardQrModal';
+import { AaoMascot, AaoLogo } from '../../components/ui/AaoBrand';
 
 /* ──────────────────────────────────────────────────────────────────────────────
    Helpers
@@ -40,6 +46,65 @@ function rewardLabel(reward: { rewardName?: string | null; rewardType: string })
   return reward.rewardName || reward.rewardType.replace(/_/g, ' ');
 }
 
+function getSlotRewardLabel(milestone: {
+  rewardName?: string | null;
+  rewardType: string;
+  rewardValue?: string | null;
+}): string {
+  if (milestone.rewardName) {
+    return milestone.rewardName;
+  }
+  if (milestone.rewardValue) {
+    if (milestone.rewardType === 'DISCOUNT_PERCENTAGE' || milestone.rewardType === 'PERCENT_DISCOUNT') {
+      return `${milestone.rewardValue}% Off`;
+    }
+    if (milestone.rewardType === 'DISCOUNT_FIXED' || milestone.rewardType === 'FIXED_DISCOUNT') {
+      return `₹${milestone.rewardValue} Off`;
+    }
+  }
+  switch (milestone.rewardType) {
+    case 'FREE_SERVICE':
+      return 'Free Service';
+    case 'FREE_PRODUCT':
+    case 'FREE_ITEM':
+      return 'Free Item';
+    case 'CUSTOM':
+      return 'Reward';
+    default:
+      return milestone.rewardType.replace(/_/g, ' ');
+  }
+}
+
+function getMilestoneRewardDetail(milestone: {
+  rewardName?: string | null;
+  rewardType?: string | null;
+  rewardValue?: string | number | null;
+  rewardDescription?: string | null;
+}): string {
+  const name = milestone.rewardName?.trim() || '';
+  if (milestone.rewardType === 'FREE_ITEM' || milestone.rewardType === 'FREE_SERVICE' || milestone.rewardType === 'FREE_PRODUCT') {
+    return name.toLowerCase().startsWith('free ') ? name : `Free ${name}`;
+  }
+  if (milestone.rewardValue) {
+    if (milestone.rewardType === 'PERCENT_DISCOUNT' || milestone.rewardType === 'DISCOUNT_PERCENTAGE') {
+      return `${milestone.rewardValue}% Off${name ? ` ${name}` : ''}`;
+    }
+    if (milestone.rewardType === 'FIXED_DISCOUNT' || milestone.rewardType === 'DISCOUNT_FIXED') {
+      return `₹${milestone.rewardValue} Off${name ? ` ${name}` : ''}`;
+    }
+  }
+  if (milestone.rewardDescription) {
+    const cleaned = milestone.rewardDescription
+      .replace(/^After \d+ qualifying visits/i, '')
+      .replace(/^[,\s-–—:]+/, '')
+      .trim();
+    if (cleaned && cleaned.toLowerCase() !== name.toLowerCase()) {
+      return cleaned;
+    }
+  }
+  return name || (milestone.rewardType ? milestone.rewardType.replace(/_/g, ' ') : 'Reward');
+}
+
 /* ──────────────────────────────────────────────────────────────────────────────
    Component
    ────────────────────────────────────────────────────────────────────────────── */
@@ -47,11 +112,7 @@ export const LoyaltyPass: React.FC = () => {
   const { qrToken } = useParams<{ qrToken: string }>();
   const navigate = useNavigate();
   const { user, sendCustomerOtp, verifyCustomerOtp, logout } = useAuth();
-
-  const [publicData, setPublicData] = useState<PublicQrData | null>(null);
-  const [loyaltyData, setLoyaltyData] = useState<CustomerLoyaltyData | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   // Inline OTP Auth States
   const [authStep, setAuthStep] = useState<'PHONE' | 'OTP'>('PHONE');
@@ -63,63 +124,104 @@ export const LoyaltyPass: React.FC = () => {
 
   // Visit Request States
   const [isRequestingVisit, setIsRequestingVisit] = useState<boolean>(false);
-  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+
+  // Reward Claim States (Claim Reward Visit flow)
+  const [activeClaim, setActiveClaim] = useState<RewardClaimData | null>(null);
+  const [isClaimingReward, setIsClaimingReward] = useState<boolean>(false);
+
+  // Stamp Approval Tracking
+  const [approvedAlert, setApprovedAlert] = useState<boolean>(false);
+  const prevVisitCountRef = React.useRef<number | null>(null);
+  const hadPendingRequestRef = React.useRef<boolean>(false);
 
   // Expandable sections
   const [showRedeemed, setShowRedeemed] = useState<boolean>(false);
+  const [showMilestones, setShowMilestones] = useState<boolean>(true);
   const [showHistory, setShowHistory] = useState<boolean>(false);
   const [historyData, setHistoryData] = useState<any[] | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
 
   // Reward QR Modal state
   const [selectedRewardForQr, setSelectedRewardForQr] = useState<CustomerRewardItem | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  /* ── Data Loading ──────────────────────────────────────────────────────── */
-  const loadPublicData = useCallback(async () => {
-    if (!qrToken) return;
-    try {
-      setError(null);
-      const data = await customerService.resolvePublicQr(qrToken);
-      setPublicData(data);
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || err.message || 'Invalid or expired QR code');
-    } finally {
-      setIsLoading(false);
-    }
+  // Complete cross-business state isolation: reset all local states when navigating between QR tokens
+  useEffect(() => {
+    prevVisitCountRef.current = null;
+    hadPendingRequestRef.current = false;
+    setActiveClaim(null);
+    setSelectedRewardForQr(null);
+    setHistoryData(null);
+    setShowHistory(false);
+    setActionError(null);
+    setApprovedAlert(false);
   }, [qrToken]);
 
-  const loadLoyaltyStatus = useCallback(async () => {
-    if (!qrToken || !user || user.role !== 'CUSTOMER') return;
-    try {
-      const data = await customerService.getLoyaltyStatus(qrToken);
-      setLoyaltyData(data);
-    } catch (err: any) {
-      console.error('Failed to load loyalty status:', err);
+  /* ── TanStack Query: Public QR Resolution ──────────────────────────────── */
+  const {
+    data: publicData,
+    isLoading: isPublicLoading,
+    error: publicQueryError,
+    refetch: refetchPublicData,
+  } = useQuery({
+    queryKey: ['public-qr', qrToken],
+    queryFn: () => customerService.resolvePublicQr(qrToken!),
+    enabled: Boolean(qrToken),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  /* ── TanStack Query: Customer Loyalty Status ───────────────────────────── */
+  const {
+    data: loyaltyData,
+    isLoading: isLoyaltyLoading,
+  } = useQuery({
+    queryKey: ['customer-loyalty', qrToken],
+    queryFn: () => customerService.getLoyaltyStatus(qrToken!),
+    enabled: Boolean(qrToken && user && user.role === 'CUSTOMER'),
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      const hasPendingVisit = Boolean(data?.pendingRequest);
+
+      const isClaimConsumed = Boolean(
+        activeClaim && data && (
+          (data.cycle?.visitCount || 0) >= activeClaim.expectedVisitNumber ||
+          data.redeemedRewards?.some(
+            (r) => r.milestoneId === activeClaim.reward.id && r.isCurrentCycle
+          )
+        )
+      );
+      const hasActiveClaim = Boolean(activeClaim && !isClaimConsumed);
+
+      if (hasPendingVisit || hasActiveClaim) {
+        return 2500;
+      }
+      return false;
+    },
+  });
+
+  const isLoading = isPublicLoading || (Boolean(user && user.role === 'CUSTOMER') && isLoyaltyLoading && !loyaltyData);
+  const error = actionError || (publicQueryError ? ((publicQueryError as any)?.response?.data?.error?.message || (publicQueryError as Error)?.message || 'Invalid or expired QR code') : null);
+
+  // Track staff approvals: trigger celebratory stamp alert only when visits increment after pending
+  useEffect(() => {
+    if (loyaltyData) {
+      const currentVisits = loyaltyData.cycle?.visitCount || 0;
+      const hasPending = Boolean(loyaltyData.pendingRequest);
+
+      if (
+        prevVisitCountRef.current !== null &&
+        currentVisits > prevVisitCountRef.current &&
+        hadPendingRequestRef.current
+      ) {
+        setApprovedAlert(true);
+        const timer = setTimeout(() => setApprovedAlert(false), 7000);
+        return () => clearTimeout(timer);
+      }
+
+      prevVisitCountRef.current = currentVisits;
+      hadPendingRequestRef.current = hasPending;
     }
-  }, [qrToken, user]);
-
-  useEffect(() => {
-    loadPublicData();
-  }, [loadPublicData]);
-
-  useEffect(() => {
-    if (user && user.role === 'CUSTOMER') {
-      loadLoyaltyStatus();
-    }
-  }, [user, loadLoyaltyStatus]);
-
-  // Polling: auto-poll every 3.5s when there is an active pending visit request,
-  // or poll periodically (every 8s) to keep rewards in sync
-  useEffect(() => {
-    if (!user || user.role !== 'CUSTOMER') return;
-
-    const pollInterval = loyaltyData?.pendingRequest ? 3000 : 8000;
-    const intervalId = setInterval(() => {
-      loadLoyaltyStatus();
-    }, pollInterval);
-
-    return () => clearInterval(intervalId);
-  }, [loyaltyData?.pendingRequest, user, loadLoyaltyStatus]);
+  }, [loyaltyData]);
 
   /* ── Auth handlers ─────────────────────────────────────────────────────── */
   const handleSendOtp = async (e: React.FormEvent) => {
@@ -159,7 +261,7 @@ export const LoyaltyPass: React.FC = () => {
       await verifyCustomerOtp(phone.trim(), otp.trim());
       setAuthStep('PHONE');
       setOtp('');
-      await loadLoyaltyStatus();
+      queryClient.invalidateQueries({ queryKey: ['customer-loyalty', qrToken] });
     } catch (err: any) {
       setAuthError(err.response?.data?.error?.message || err.message || 'Invalid or expired OTP');
     } finally {
@@ -171,18 +273,31 @@ export const LoyaltyPass: React.FC = () => {
   const handleRequestStamp = async () => {
     if (!qrToken) return;
     setIsRequestingVisit(true);
-    setError(null);
-    setActionSuccess(null);
+    setActionError(null);
 
     try {
       await customerService.createVisitRequest(qrToken);
-      setActionSuccess('Stamp requested! Waiting for staff approval.');
-      await loadLoyaltyStatus();
-      setTimeout(() => setActionSuccess(null), 5000);
+      queryClient.invalidateQueries({ queryKey: ['customer-loyalty', qrToken] });
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || err.message || 'Failed to request stamp');
+      setActionError(err.response?.data?.error?.message || err.message || 'Failed to request stamp');
     } finally {
       setIsRequestingVisit(false);
+    }
+  };
+
+  /* ── Reward Claim handler (special flow: no VisitRequest created) ───────── */
+  const handleClaimRewardVisit = async () => {
+    if (!qrToken) return;
+    setIsClaimingReward(true);
+    setActionError(null);
+
+    try {
+      const claimData = await customerService.createRewardClaim(qrToken);
+      setActiveClaim(claimData);
+    } catch (err: any) {
+      setActionError(err.response?.data?.error?.message || err.message || 'Failed to generate reward claim token');
+    } finally {
+      setIsClaimingReward(false);
     }
   };
 
@@ -206,20 +321,46 @@ export const LoyaltyPass: React.FC = () => {
 
   /* ── Derived data ──────────────────────────────────────────────────────── */
   const cycleLength = loyaltyData?.cycle?.cycleLength || publicData?.program.cycleLength || 4;
-  const qualifyingSlots = cycleLength;
-  const totalVisualSlots = cycleLength + 1;
   const visitCount = loyaltyData?.cycle?.visitCount || 0;
-  const cycleNumber = loyaltyData?.cycle?.cycleNumber || 1;
 
   const isAuthenticated = user && user.role === 'CUSTOMER';
+
+  const customerName = useMemo(() => {
+    const raw = user?.name || loyaltyData?.customer?.name;
+    if (!raw) return null;
+    const trimmed = raw.trim();
+    if (!trimmed || ['customer', 'user', 'there', 'null', 'undefined'].includes(trimmed.toLowerCase())) {
+      return null;
+    }
+    return trimmed.split(' ')[0];
+  }, [user?.name, loyaltyData?.customer?.name]);
 
   const nextMilestone = useMemo(() => {
     const milestones = loyaltyData?.milestones || publicData?.program.milestones;
     if (!milestones) return null;
     return milestones.find(
-      (m: any) => m.visitNumber > visitCount && m.rewardType !== 'NONE'
+      (m: any) => m.visitNumber > visitCount && m.rewardType && m.rewardType !== 'NONE'
     ) || null;
   }, [loyaltyData?.milestones, publicData?.program.milestones, visitCount]);
+
+  const nextVisitNumber = visitCount + 1;
+
+  const nextVisitMilestone = useMemo(() => {
+    const milestones = loyaltyData?.milestones || publicData?.program.milestones;
+    if (!milestones) return null;
+    return milestones.find((m: any) => m.visitNumber === nextVisitNumber) || null;
+  }, [loyaltyData?.milestones, publicData?.program.milestones, nextVisitNumber]);
+
+  const isNextVisitReward = Boolean(
+    nextVisitMilestone &&
+    nextVisitMilestone.rewardType &&
+    nextVisitMilestone.rewardType !== 'NONE'
+  );
+
+  const nextVisitRewardName = useMemo(() => {
+    if (!nextVisitMilestone) return 'Reward';
+    return (nextVisitMilestone as any).rewardName || (nextVisitMilestone as any).rewardType?.replace(/_/g, ' ') || 'Reward';
+  }, [nextVisitMilestone]);
 
   const unlockedRewards: CustomerRewardItem[] = useMemo(() => {
     return loyaltyData?.unlockedRewards || [];
@@ -237,30 +378,41 @@ export const LoyaltyPass: React.FC = () => {
     return redeemedRewards.find((r) => r.isCurrentCycle) || redeemedRewards[0] || null;
   }, [redeemedRewards]);
 
-  const isCycleCompleted = useMemo(() => {
+  const isNewVirtualCycle = useMemo(() => {
     return (
-      Boolean((loyaltyData?.cycle as any)?.isCycleCompleted) ||
-      loyaltyData?.cycle?.status === 'COMPLETED' ||
-      visitCount >= cycleLength
+      (loyaltyData?.cycle?.id === null && !activeUnlockedReward) ||
+      (visitCount === 0 && !activeUnlockedReward && ((loyaltyData?.cycle?.cycleNumber || 1) > 1 || Boolean((loyaltyData?.cycle as any)?.previousCycleNumber)))
     );
-  }, [loyaltyData?.cycle, visitCount, cycleLength]);
+  }, [loyaltyData?.cycle, activeUnlockedReward, visitCount]);
+
+  const isCycleCompleted = useMemo(() => {
+    if (isNewVirtualCycle) return false;
+    return (
+      visitCount >= cycleLength &&
+      (Boolean((loyaltyData?.cycle as any)?.isCycleCompleted) ||
+        loyaltyData?.cycle?.status === 'COMPLETED' ||
+        visitCount >= cycleLength)
+    );
+  }, [isNewVirtualCycle, loyaltyData?.cycle, visitCount, cycleLength]);
 
   const isRewardRedeemed = useMemo(() => {
+    if (isNewVirtualCycle) return false;
     if (activeUnlockedReward) return false;
-    if (isCycleCompleted && latestRedeemedReward) return true;
-    const finalMilestone = loyaltyData?.milestones?.find((m) => m.visitNumber === cycleLength);
-    if (finalMilestone?.status === 'REDEEMED') return true;
-    return false;
-  }, [activeUnlockedReward, isCycleCompleted, latestRedeemedReward, loyaltyData?.milestones, cycleLength]);
+    return isCycleCompleted && Boolean(latestRedeemedReward?.isCurrentCycle);
+  }, [isNewVirtualCycle, activeUnlockedReward, isCycleCompleted, latestRedeemedReward]);
 
-  const completedVisualCount = useMemo(() => {
-    if (isRewardRedeemed) {
-      return totalVisualSlots;
-    }
-    return Math.min(qualifyingSlots, visitCount);
-  }, [isRewardRedeemed, totalVisualSlots, qualifyingSlots, visitCount]);
+  const isClaimRedeemed = useMemo(() => {
+    if (!activeClaim) return false;
+    const currentVisits = loyaltyData?.cycle?.visitCount || 0;
+    if (currentVisits >= activeClaim.expectedVisitNumber) return true;
+    return Boolean(
+      loyaltyData?.redeemedRewards?.some(
+        (r) => r.milestoneId === activeClaim.reward.id && r.isCurrentCycle
+      )
+    );
+  }, [activeClaim, loyaltyData]);
 
-  const progressPercent = Math.min(100, Math.round((completedVisualCount / totalVisualSlots) * 100));
+  const progressPercent = Math.min(100, Math.round((Math.min(visitCount, cycleLength) / cycleLength) * 100));
 
   // Deduplicated unlocked rewards: exclude the one already highlighted in the hero card
   const otherUnlockedRewards = useMemo(() => {
@@ -309,7 +461,7 @@ export const LoyaltyPass: React.FC = () => {
           <h2 className="text-base font-bold text-[#172033]">QR Code Error</h2>
           <p className="text-sm text-[#667085] mt-1 mb-6">{error}</p>
           <button
-            onClick={loadPublicData}
+            onClick={() => refetchPublicData()}
             className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 bg-[#FFD444] hover:bg-[#F4EB6C] text-[#172033] rounded-xl text-sm font-bold transition-all shadow-xs cursor-pointer active:scale-[0.98]"
           >
             <RefreshCw className="w-4 h-4" />
@@ -373,17 +525,29 @@ export const LoyaltyPass: React.FC = () => {
       </header>
 
       <div className="w-full max-w-md px-4 mt-5 space-y-4">
-        {/* ── Global Alerts ────────────────────────────────────────────────── */}
-        {actionSuccess && (
-          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>{actionSuccess}</span>
+        {/* ── Global Alerts with AAO Moments ─────────────────────────────── */}
+        {loyaltyData?.pendingRequest && (
+          <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-[#FFD444]/60 text-[#172033] text-sm flex items-center gap-3 shadow-xs">
+            <AaoMascot mood="hello" size={38} className="shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-sm text-[#172033]">Almost there!</p>
+              <p className="text-xs text-[#667085] mt-0.5">Your visit is waiting for staff approval.</p>
+            </div>
+          </div>
+        )}
+        {approvedAlert && (
+          <div className="p-3.5 rounded-2xl bg-[#EAFBEF] border border-[#55E07E]/40 text-[#172033] text-sm flex items-center gap-3 shadow-xs">
+            <AaoMascot mood="stamp" size={38} className="shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-sm text-[#172033]">Nice! You got a stamp!</p>
+              <p className="text-xs text-[#0E7A36] mt-0.5">Your loyalty card just moved one step closer to your reward.</p>
+            </div>
           </div>
         )}
         {error && (
-          <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-center gap-2.5">
-            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
-            <span>{error}</span>
+          <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-center gap-3 shadow-xs">
+            <AaoMascot mood="oops" size={34} className="shrink-0" />
+            <span className="text-xs font-medium">{error}</span>
           </div>
         )}
 
@@ -507,33 +671,38 @@ export const LoyaltyPass: React.FC = () => {
           className="bg-white border border-[#E5E7EB] rounded-2xl overflow-hidden shadow-xs"
         >
           {/* Customer greeting bar */}
-          {isAuthenticated && loyaltyData && (
+          {isAuthenticated && (
             <div className="px-5 pt-4 pb-0">
               <p className="text-xs text-[#667085]">
-                Welcome back, <span className="font-bold text-[#172033]">{loyaltyData.customer.name || 'there'}</span>
+                {customerName ? (
+                  <>
+                    Welcome back, <span className="font-bold text-[#172033]">{customerName}</span>!
+                  </>
+                ) : (
+                  <span className="font-medium text-[#667085]">Welcome back!</span>
+                )}
               </p>
             </div>
           )}
 
           <div className="px-5 pt-4 pb-5 space-y-4">
-            {/* Top line: program name + cycle badge */}
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-medium text-[#667085] mb-0.5">
-                  {publicData?.program.name || loyaltyData?.program.name || 'Loyalty Program'}
-                </p>
-                <h2 className="text-2xl font-extrabold text-[#172033] tracking-tight leading-none">
-                  {completedVisualCount} of {totalVisualSlots}
-                </h2>
-                <p className="text-xs text-[#667085] mt-1">
-                  {isRewardRedeemed
-                    ? 'Reward redeemed • Cycle completed'
-                    : `${visitCount} qualifying visit${visitCount !== 1 ? 's' : ''} completed`}
-                </p>
-              </div>
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-50 border border-[#E5E7EB] text-[#667085] shrink-0">
-                Cycle {cycleNumber}
-              </span>
+            {/* Top line: program name + visits */}
+            <div>
+              <p className="text-xs font-medium text-[#667085] mb-0.5">
+                {publicData?.program.name || loyaltyData?.program.name || 'Loyalty Program'}
+              </p>
+              <h2 className="text-2xl font-extrabold text-[#172033] tracking-tight leading-none">
+                {`${Math.min(visitCount, cycleLength)} of ${cycleLength} visits`}
+              </h2>
+              <p className="text-xs text-[#667085] mt-1">
+                {isRewardRedeemed
+                  ? 'Reward Redeemed'
+                  : isNewVirtualCycle
+                  ? 'Your next loyalty cycle starts here.'
+                  : visitCount === 0
+                  ? 'Your first reward starts with your first visit.'
+                  : `${visitCount} qualifying visit${visitCount !== 1 ? 's' : ''} completed`}
+              </p>
             </div>
 
             {/* Progress bar */}
@@ -545,202 +714,243 @@ export const LoyaltyPass: React.FC = () => {
                 />
               </div>
               {activeUnlockedReward ? (
-                <p className="text-xs font-bold mt-1.5 flex items-center justify-between text-[#172033]">
-                  <span className="text-[#0E7A36] flex items-center gap-1 font-bold">
-                    <span>Reward Ready</span>
-                  </span>
-                  <span className="truncate max-w-[160px] text-[#172033] font-bold">
+                <div className="mt-1.5 flex items-center justify-between text-xs">
+                  <span className="text-[#0E7A36] font-bold">Reward Ready</span>
+                  <span className="truncate max-w-[180px] text-[#172033] font-bold">
                     {rewardLabel(activeUnlockedReward)}
                   </span>
-                </p>
+                </div>
               ) : isRewardRedeemed ? (
-                <p className="text-xs font-bold mt-1.5 flex items-center justify-between text-[#172033]">
-                  <span className="text-[#0E7A36] flex items-center gap-1 font-bold">
+                <div className="mt-1.5 flex items-center justify-between text-xs">
+                  <span className="text-[#0E7A36] font-bold flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5 text-[#16A34A]" />
                     <span>Reward Redeemed</span>
                   </span>
-                  <span className="truncate max-w-[160px] text-[#667085] font-normal">
+                  <span className="truncate max-w-[180px] text-[#667085]">
                     {latestRedeemedReward ? rewardLabel(latestRedeemedReward) : 'Completed'}
                   </span>
-                </p>
+                </div>
               ) : nextMilestone && !isCycleCompleted ? (
-                <p className="text-xs text-[#667085] mt-1.5 flex items-center justify-between">
-                  <span>
-                    {qualifyingSlots - visitCount} visit{qualifyingSlots - visitCount !== 1 ? 's' : ''} until next reward
+                <div className="mt-1.5 flex items-center justify-between text-[11px] text-[#667085] leading-normal">
+                  <span className="truncate">
+                    {Math.max(1, nextMilestone.visitNumber - visitCount)} visit{Math.max(1, nextMilestone.visitNumber - visitCount) !== 1 ? 's' : ''} until next reward
+                    <span className="text-[#98A2B3] mx-1">—</span>
+                    <span className="font-semibold text-[#172033]">
+                      {(nextMilestone as any).rewardName || (nextMilestone as any).rewardType?.replace(/_/g, ' ')}
+                    </span>
                   </span>
-                  <span className="text-[#172033] font-bold truncate max-w-[140px]">
-                    {(nextMilestone as any).rewardName || (nextMilestone as any).rewardType?.replace(/_/g, ' ')}
+                  <span className="text-[10px] font-bold text-[#667085] shrink-0 ml-2">
+                    {Math.max(1, nextMilestone.visitNumber - visitCount)} to go
                   </span>
-                </p>
+                </div>
               ) : isCycleCompleted ? (
-                <p className="text-xs text-[#0E7A36] font-bold mt-1.5">
-                  Cycle complete! Your next qualifying visit starts a new cycle.
-                </p>
-              ) : null}
+                <div className="mt-1.5 flex items-center justify-between text-xs text-[#0E7A36] font-bold">
+                  <span>Cycle completed!</span>
+                  <span>All rewards unlocked</span>
+                </div>
+              ) : (
+                <div className="mt-1.5 flex items-center justify-between text-xs text-[#667085]">
+                  <span>{cycleLength} qualifying visits in cycle</span>
+                </div>
+              )}
             </div>
 
-            {/* ── Stamp punch grid (5 visual slots: 4 qualifying + 1 reward) ──────────────── */}
+            {/* ── Stamp punch grid (EXACTLY cycleLength visual slots) ──────────────── */}
             <div className="bg-[#F8FAFC] border border-[#E5E7EB] rounded-2xl p-3.5">
               <div
                 className={`grid gap-2 ${
-                  totalVisualSlots <= 5
+                  cycleLength <= 4
+                    ? 'grid-cols-4'
+                    : cycleLength === 5
                     ? 'grid-cols-5'
-                    : totalVisualSlots <= 8
+                    : cycleLength <= 8
                     ? 'grid-cols-4'
                     : 'grid-cols-5'
                 }`}
               >
-                {Array.from({ length: totalVisualSlots }, (_, i) => {
+                {Array.from({ length: cycleLength }, (_, i) => {
                   const slotNum = i + 1;
-                  const isRewardSlot = slotNum === totalVisualSlots;
-                  const isCompletedQualifying = slotNum <= visitCount && !isRewardSlot;
-                  const isCompletedReward = isRewardSlot && isRewardRedeemed;
-                  const isCompleted = isCompletedQualifying || isCompletedReward;
-
-                  const milestones = publicData?.program.milestones || [];
-                  const milestoneOnSlot = milestones.find(
-                    (m) => m.visitNumber === slotNum && m.rewardType !== 'NONE'
+                  const isCompleted = !isNewVirtualCycle && slotNum <= visitCount;
+                  const programMilestones = loyaltyData?.milestones || publicData?.program?.milestones || [];
+                  const milestone = programMilestones.find(
+                    (m: any) => m.visitNumber === slotNum
                   );
+                  const hasReward = Boolean(
+                    milestone &&
+                    milestone.rewardType &&
+                    milestone.rewardType !== 'NONE'
+                  );
+                  const rewardLabelText = milestone ? getSlotRewardLabel(milestone) : '';
+                  const mAny = milestone as any;
+                  const isRedeemed = !isNewVirtualCycle && (mAny?.status === 'REDEEMED' || (mAny?.id ? redeemedRewards.some((r) => r.milestoneId === mAny.id && r.isCurrentCycle) : false));
+                  const isUnlocked = !isNewVirtualCycle && (mAny?.status === 'UNLOCKED' || (!isRedeemed && (isCompleted || (mAny?.id ? unlockedRewards.some((r) => r.milestoneId === mAny.id && r.isCurrentCycle) : false))));
 
-                  if (isCompleted) {
+                  // Case A: Normal visit slot (NONE milestone or no reward)
+                  if (!hasReward) {
+                    if (isCompleted) {
+                      return (
+                        <div
+                          key={slotNum}
+                          title={`Visit ${slotNum} completed`}
+                          className="aspect-square rounded-xl bg-[#EAFBEF] border-2 border-[#55E07E] flex items-center justify-center shadow-xs transition-all"
+                        >
+                          <Check className="w-5 h-5 text-[#0E7A36] stroke-[3]" />
+                        </div>
+                      );
+                    }
+
                     return (
                       <div
                         key={slotNum}
-                        className="aspect-square rounded-xl bg-[#EAFBEF] border-2 border-[#55E07E] flex flex-col items-center justify-center shadow-xs transition-all"
+                        title={`Visit ${slotNum}`}
+                        className="aspect-square rounded-xl bg-white border-2 border-dashed border-slate-200 text-[#667085] flex items-center justify-center transition-all"
+                      >
+                        <span className="text-sm font-bold text-[#667085]">{slotNum}</span>
+                      </div>
+                    );
+                  }
+
+                  // Case B: Reward milestone slot
+                  if (isRedeemed) {
+                    // Redeemed milestone reward: completed checkmark
+                    return (
+                      <div
+                        key={slotNum}
+                        title={`Visit ${slotNum}: ${rewardLabelText} (Redeemed)`}
+                        className="aspect-square rounded-xl bg-[#EAFBEF] border-2 border-[#55E07E] flex items-center justify-center shadow-xs transition-all"
                       >
                         <Check className="w-5 h-5 text-[#0E7A36] stroke-[3]" />
                       </div>
                     );
                   }
 
-                  if (isRewardSlot) {
+                  if (isUnlocked || isCompleted) {
+                    // Reached / Unlocked milestone reward: 🎁 with subtle green/reward treatment
                     return (
                       <div
                         key={slotNum}
-                        className="aspect-square rounded-xl bg-[#EAFBEF] border-2 border-dashed border-[#55E07E] flex flex-col items-center justify-center transition-all shadow-xs"
+                        title={`Visit ${slotNum}: ${rewardLabelText} (Reward Ready)`}
+                        className="aspect-square rounded-xl bg-[#EAFBEF] border-2 border-[#55E07E] flex items-center justify-center shadow-xs transition-all"
                       >
-                        <Gift className="w-4 h-4 text-[#16A34A]" />
-                        <span className="text-[10px] font-bold text-[#0E7A36] leading-none mt-1">
-                          Reward
-                        </span>
+                        <Gift className="w-5 h-5 text-[#0E7A36]" />
                       </div>
                     );
                   }
 
+                  // Locked future reward milestone: 🎁 subtle yellow/gold treatment
                   return (
                     <div
                       key={slotNum}
-                      className={`aspect-square rounded-xl border-2 flex flex-col items-center justify-center transition-all ${
-                        milestoneOnSlot
-                          ? 'bg-[#EAFBEF]/40 border-2 border-[#55E07E]/40 border-dashed text-[#172033]'
-                          : 'bg-[#FFFFFF] border-2 border-slate-200 border-dashed text-[#667085]'
-                      }`}
+                      title={`Visit ${slotNum}: ${rewardLabelText}`}
+                      className="aspect-square rounded-xl bg-[#FFFDF5] border-2 border-dashed border-[#FFD444]/80 flex items-center justify-center transition-all shadow-xs"
                     >
-                      {milestoneOnSlot ? (
-                        <>
-                          <Gift className="w-3.5 h-3.5 text-[#16A34A]" />
-                          <span className="text-[9px] font-bold text-[#172033] leading-none mt-0.5">
-                            {slotNum}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-xs font-semibold text-[#667085]">{slotNum}</span>
-                      )}
+                      <Gift className="w-5 h-5 text-[#D97706]" />
                     </div>
                   );
                 })}
               </div>
             </div>
 
-            {/* ── Action Section: Show Reward OR Redeemed State OR Request Stamp ───────────── */}
+            {/* ── Action Section: Show Reward OR Redeemed State OR Stamp Pending OR Request Stamp ───────────── */}
             {isAuthenticated && (
               <div>
                 {activeUnlockedReward ? (
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3 shadow-xs">
-                    <div className="flex items-center justify-between">
-                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#EAFBEF] border border-[#55E07E]/40 text-[#0E7A36] text-[11px] font-extrabold tracking-wide">
-                        <Gift className="w-3.5 h-3.5 text-[#16A34A]" />
-                        <span>REWARD READY</span>
+                  /* State D: Reward Ready */
+                  <div className="rounded-2xl border border-[#55E07E]/40 bg-[#EAFBEF] p-4 space-y-3 shadow-xs">
+                    <div className="flex items-center gap-3">
+                      <AaoMascot mood="reward" size={48} className="shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-base font-black text-[#172033] leading-tight">
+                          You did it!
+                        </h3>
+                        <p className="text-sm font-bold text-[#0E7A36] mt-0.5 truncate">
+                          Your {rewardLabel(activeUnlockedReward)} is ready.
+                        </p>
                       </div>
-                      <span className="text-xs font-semibold text-[#0E7A36]">
-                        Ready to Redeem
-                      </span>
-                    </div>
-
-                    <div>
-                      <h3 className="text-lg font-black text-[#172033] leading-tight">
-                        {rewardLabel(activeUnlockedReward)}
-                      </h3>
-                      <p className="text-xs text-[#667085] mt-1 leading-relaxed">
-                        You completed all {qualifyingSlots} qualifying visits. Show this QR to staff to redeem your reward.
-                      </p>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => setSelectedRewardForQr(activeUnlockedReward)}
-                      className="w-full py-3 px-4 bg-[#FFD444] hover:bg-[#F4EB6C] text-[#172033] rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer active:scale-[0.98]"
+                      className="w-full py-3 px-4 bg-[#FFD444] hover:bg-[#FACC15] text-[#172033] rounded-xl text-sm font-black flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer active:scale-[0.98]"
                     >
                       <QrCode className="w-4 h-4 stroke-[2.5]" />
-                      <span>Show Reward</span>
+                      <span>Show Reward &rarr;</span>
                     </button>
                   </div>
                 ) : isRewardRedeemed && latestRedeemedReward ? (
-                  <div className="rounded-2xl border border-[#55E07E]/40 bg-[#EAFBEF] p-4 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-[#55E07E]/40 text-[#0E7A36] text-[11px] font-extrabold tracking-wide">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-[#16A34A]" />
-                        <span>REWARD REDEEMED</span>
+                  /* State E: Reward Redeemed - Emotional Payoff */
+                  <div className="rounded-2xl border border-[#55E07E]/50 bg-[#EAFBEF] p-4.5 flex items-center gap-3.5 shadow-xs">
+                    <AaoMascot mood="celebrate" size={52} className="shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white border border-[#55E07E]/50 text-[#0E7A36] text-[10px] font-black uppercase tracking-wider mb-1 shadow-2xs">
+                        <Sparkles className="w-3 h-3 text-[#0E7A36]" />
+                        <span>You did it!</span>
                       </div>
-                      {latestRedeemedReward.redeemedAt && (
-                        <span className="text-xs font-medium text-[#0E7A36]">
-                          Redeemed on {formatDate(latestRedeemedReward.redeemedAt)}
-                        </span>
-                      )}
-                    </div>
-
-                    <div>
-                      <h3 className="text-base font-bold text-[#172033] leading-tight">
-                        {rewardLabel(latestRedeemedReward)}
+                      <h3 className="text-sm font-black text-[#172033] leading-snug">
+                        Your {latestRedeemedReward.rewardName || latestRedeemedReward.rewardType?.replace(/_/g, ' ') || 'reward'} has been redeemed.
                       </h3>
-                      <p className="text-xs text-[#667085] mt-1">
-                        Your next qualifying visit starts a new loyalty cycle.
+                      <p className="text-xs font-bold text-[#0E7A36] mt-1">
+                        See you again!
                       </p>
                     </div>
                   </div>
                 ) : loyaltyData?.pendingRequest ? (
-                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-[#EAFBEF] text-[#16A34A] flex items-center justify-center shrink-0">
-                        <Clock className="w-4 h-4 text-[#16A34A]" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-[#172033] leading-tight">
-                          Stamp Pending
-                        </p>
-                        <p className="text-xs text-[#667085] mt-0.5">
-                          Show your screen to staff
-                        </p>
-                      </div>
-                    </div>
-                    <Loader2 className="w-4 h-4 text-[#16A34A] animate-spin shrink-0" />
+                  /* State B: Stamp Requested / Pending - Compact approval state */
+                  <div className="w-full py-3.5 px-4 bg-[#F8FAFC] border border-dashed border-[#E5E7EB] rounded-xl flex items-center justify-center gap-2 text-xs font-semibold text-[#667085]">
+                    <Loader2 className="w-4 h-4 text-[#FFD444] animate-spin shrink-0" />
+                    <span>Waiting for staff approval...</span>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    <button
-                      onClick={handleRequestStamp}
-                      disabled={isRequestingVisit}
-                      className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-4 bg-[#FFD444] hover:bg-[#F4EB6C] text-[#172033] rounded-xl text-sm font-bold transition-all cursor-pointer disabled:opacity-50 shadow-xs active:scale-[0.98]"
-                    >
-                      {isRequestingVisit ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin text-[#172033]" />
-                          <span>Requesting…</span>
-                        </>
-                      ) : (
-                        <span>Request a Stamp</span>
-                      )}
-                    </button>
+                  /* State A: Request a Stamp OR Complete Final Visit */
+                  <div className="space-y-2.5">
+                    {isNextVisitReward && (
+                      <div className="rounded-2xl bg-[#FFFDF5] border border-[#FFD444]/70 p-3.5 flex items-center gap-3 shadow-xs">
+                        <div className="w-10 h-10 rounded-xl bg-[#FFFBEB] border border-[#FFD444] flex items-center justify-center shrink-0 text-[#D97706]">
+                          <Gift className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] font-black uppercase text-[#B45309] tracking-wider block">
+                            ALMOST THERE!
+                          </span>
+                          <p className="text-xs font-bold text-[#172033] leading-snug">
+                            One more visit and your {nextVisitRewardName} is yours.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {isNextVisitReward ? (
+                      <button
+                        onClick={handleClaimRewardVisit}
+                        disabled={isClaimingReward}
+                        className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-4 bg-[#FFD444] hover:bg-[#FACC15] text-[#172033] rounded-xl text-sm font-black transition-all cursor-pointer disabled:opacity-50 shadow-xs active:scale-[0.98]"
+                      >
+                        {isClaimingReward ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin text-[#172033]" />
+                            <span>Generating QR…</span>
+                          </>
+                        ) : (
+                          <span>Complete Final Visit &rarr;</span>
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleRequestStamp}
+                        disabled={isRequestingVisit}
+                        className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-4 bg-[#FFD444] hover:bg-[#FACC15] text-[#172033] rounded-xl text-sm font-black transition-all cursor-pointer disabled:opacity-50 shadow-xs active:scale-[0.98]"
+                      >
+                        {isRequestingVisit ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin text-[#172033]" />
+                            <span>Requesting…</span>
+                          </>
+                        ) : (
+                          <span>Request a Stamp</span>
+                        )}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -748,30 +958,32 @@ export const LoyaltyPass: React.FC = () => {
           </div>
         </section>
 
-        {/* ─── NEXT REWARD CARD ──────────────────────────────────────────── */}
-        {nextMilestone && !activeUnlockedReward && !isCycleCompleted && !isRewardRedeemed && (
+        {/* ─── NEXT REWARD CARD (Hidden when next visit is already the reward milestone) ─── */}
+        {nextMilestone && !isNextVisitReward && !activeUnlockedReward && !isCycleCompleted && !isRewardRedeemed && (
           <section
-            className="bg-white border border-[#E5E7EB] rounded-2xl p-5 shadow-xs"
+            className="bg-white border border-[#E5E7EB] rounded-2xl py-3.5 px-4 sm:p-4.5 shadow-xs"
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-slate-50 border border-[#E5E7EB] text-[#FFD444] flex items-center justify-center shrink-0">
-                <Star className="w-5 h-5 fill-[#FFD444]" />
+              <div className="w-9 h-9 rounded-xl bg-slate-50 border border-[#E5E7EB] text-[#FFD444] flex items-center justify-center shrink-0">
+                <Star className="w-4.5 h-4.5 fill-[#FFD444]" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-[#667085]">Next Reward</p>
+                <p className="text-xs font-medium text-[#667085]">
+                  {Math.max(1, nextMilestone.visitNumber - visitCount)} visit{Math.max(1, nextMilestone.visitNumber - visitCount) !== 1 ? 's' : ''} until next reward
+                </p>
                 <p className="text-sm font-bold text-[#172033] truncate">
                   {(nextMilestone as any).rewardName || (nextMilestone as any).rewardType?.replace(/_/g, ' ')}
                 </p>
               </div>
               <div className="text-right shrink-0">
                 <p className="text-lg font-extrabold text-[#172033] leading-none">
-                  {nextMilestone.visitNumber}
+                  {Math.max(1, nextMilestone.visitNumber - visitCount)}
                 </p>
-                <p className="text-[10px] text-[#667085] font-medium">stamps</p>
+                <p className="text-[10px] text-[#667085] font-medium">to go</p>
               </div>
             </div>
             {(nextMilestone as any).rewardDescription && (
-              <p className="text-xs text-[#667085] mt-2 ml-[52px]">
+              <p className="text-xs text-[#667085] mt-1.5 ml-12">
                 {(nextMilestone as any).rewardDescription}
               </p>
             )}
@@ -810,9 +1022,11 @@ export const LoyaltyPass: React.FC = () => {
                         <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase bg-[#EAFBEF] text-[#0E7A36] border border-[#55E07E]/30 rounded">
                           Reached
                         </span>
-                        <span className="text-[11px] text-[#667085]">
-                          Cycle {reward.cycleNumber}
-                        </span>
+                        {reward.unlockedAt && (
+                          <span className="text-[11px] text-[#667085]">
+                            Earned {formatDate(reward.unlockedAt)}
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm font-bold text-[#172033]">
                         {rewardLabel(reward)}
@@ -902,101 +1116,116 @@ export const LoyaltyPass: React.FC = () => {
           </section>
         )}
 
-        {/* ─── MILESTONES TIMELINE ───────────────────────────────────────── */}
+        {/* ─── MILESTONES TIMELINE (Collapsible) ───────────────────────────── */}
         {(loyaltyData?.milestones || publicData?.program.milestones) && (
           <section
-            className="bg-white border border-[#E5E7EB] rounded-2xl p-5 shadow-xs"
+            className="bg-white border border-[#E5E7EB] rounded-2xl overflow-hidden shadow-xs"
           >
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-7 h-7 rounded-lg bg-[#EAFBEF] border border-[#55E07E]/30 text-[#16A34A] flex items-center justify-center">
-                <Award className="w-3.5 h-3.5" />
-              </div>
-              <h3 className="text-sm font-bold text-[#172033]">Milestones</h3>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowMilestones(!showMilestones)}
+              className="w-full px-5 py-3.5 flex items-center justify-between text-sm font-semibold text-[#172033] hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              <span className="flex items-center gap-2">
+                <Award className="w-4 h-4 text-[#667085]" />
+                <span>Milestones</span>
+              </span>
+              {showMilestones ? (
+                <ChevronUp className="w-4 h-4 text-[#667085]" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-[#667085]" />
+              )}
+            </button>
 
-            <div className="relative">
-              {/* Vertical line */}
-              <div className="absolute left-[15px] top-2 bottom-2 w-px bg-slate-200" />
+            {showMilestones && (
+              <div className="px-5 pb-4 pt-1">
+                <div className="relative">
+                  {/* Vertical line */}
+                  <div className="absolute left-[15px] top-2 bottom-2 w-px bg-slate-200" />
 
-              <div className="space-y-0">
-                {(loyaltyData?.milestones || publicData?.program.milestones || []).map(
-                  (m: any, idx: number) => {
-                    const isReached = visitCount >= m.visitNumber;
-                    const isReward = m.rewardType !== 'NONE';
-                    const milestoneStatus = m.status || (isReached ? 'UNLOCKED' : 'LOCKED');
-                    const isUnlocked = milestoneStatus === 'UNLOCKED';
-                    const isRedeemed = milestoneStatus === 'REDEEMED';
+                  <div className="space-y-0">
+                    {(loyaltyData?.milestones || publicData?.program.milestones || []).map(
+                      (m: any, idx: number) => {
+                        const isReached = !isNewVirtualCycle && visitCount >= m.visitNumber;
+                        const isReward = m.rewardType && m.rewardType !== 'NONE';
+                        const isRedeemed = !isNewVirtualCycle && (m.status === 'REDEEMED' || (m.id ? redeemedRewards.some((r) => r.milestoneId === m.id && r.isCurrentCycle) : false));
+                        const isUnlocked = !isNewVirtualCycle && (m.status === 'UNLOCKED' || (!isRedeemed && (isReached || (m.id ? unlockedRewards.some((r) => r.milestoneId === m.id && r.isCurrentCycle) : false))));
 
-                    return (
-                      <div key={m.id || idx} className="relative flex items-start gap-3 py-2.5">
-                        {/* Circle indicator */}
-                        <div
-                          className={`relative z-10 w-[30px] h-[30px] rounded-full border-2 flex items-center justify-center shrink-0 ${
-                            isRedeemed
-                              ? 'bg-slate-100 border-slate-300 text-[#667085]'
-                              : isReached || isUnlocked
-                              ? 'bg-[#EAFBEF] border-2 border-[#55E07E] text-[#0E7A36]'
-                              : isReward
-                              ? 'bg-[#F8FAFC] border-2 border-dashed border-slate-300 text-[#667085]'
-                              : 'bg-white border-slate-200 text-[#667085]'
-                          }`}
-                        >
-                          {isRedeemed ? (
-                            <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                          ) : isReached || isUnlocked ? (
-                            <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                          ) : isReward ? (
-                            <Gift className="w-3.5 h-3.5" />
-                          ) : (
-                            <span className="text-[11px] font-bold">{m.visitNumber}</span>
-                          )}
-                        </div>
-
-                        {/* Content */}
-                        <div className="flex-1 min-w-0 pt-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <p
-                              className={`text-sm font-medium truncate ${
+                        return (
+                          <div key={m.id || idx} className="relative flex items-start gap-3 py-2.5">
+                            {/* Circle indicator */}
+                            <div
+                              className={`relative z-10 w-[30px] h-[30px] rounded-full border-2 flex items-center justify-center shrink-0 ${
                                 isRedeemed
-                                  ? 'text-[#667085] line-through'
-                                  : isReached || isUnlocked
-                                  ? 'text-[#172033] font-bold'
-                                  : 'text-[#667085]'
+                                  ? 'bg-slate-100 border-slate-300 text-[#667085]'
+                                  : isUnlocked
+                                  ? 'bg-[#EAFBEF] border-2 border-[#55E07E] text-[#0E7A36]'
+                                  : isReward
+                                  ? 'bg-[#FFFDF5] border-2 border-dashed border-[#FFD444]/80 text-[#D97706]'
+                                  : isReached
+                                  ? 'bg-[#EAFBEF] border-2 border-[#55E07E] text-[#0E7A36]'
+                                  : 'bg-white border-slate-200 text-[#667085]'
                               }`}
                             >
-                              {isReward
-                                ? m.rewardName || m.rewardType.replace(/_/g, ' ')
-                                : `Visit ${m.visitNumber}`}
-                            </p>
-                            {isReward && (
-                              <span
-                                className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full shrink-0 ${
+                              {isRedeemed ? (
+                                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                              ) : isReward ? (
+                                <Gift className={`w-3.5 h-3.5 ${isUnlocked ? 'text-[#0E7A36]' : 'text-[#D97706]'}`} />
+                              ) : isReached ? (
+                                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                              ) : (
+                                <span className="text-[11px] font-bold text-[#667085]">{m.visitNumber}</span>
+                              )}
+                            </div>
+
+                            {/* Content */}
+                            <div className="flex-1 min-w-0 pt-1">
+                              <p
+                                className={`text-sm font-bold truncate ${
                                   isRedeemed
-                                    ? 'bg-slate-100 text-[#667085]'
-                                    : isReached || isUnlocked
-                                    ? 'bg-[#EAFBEF] text-[#0E7A36] border border-[#55E07E]/30'
-                                    : 'bg-slate-100 text-[#667085]'
+                                    ? 'text-[#667085] line-through'
+                                    : isUnlocked || isReward
+                                    ? 'text-[#172033]'
+                                    : 'text-[#667085]'
                                 }`}
                               >
-                                {isRedeemed ? 'Redeemed' : (isReached || isUnlocked) ? 'Reached' : 'Locked'}
-                              </span>
-                            )}
+                                {isReward ? (
+                                  <>
+                                    <span>{m.rewardName || m.rewardType.replace(/_/g, ' ')}</span>
+                                    <span className="text-[#667085] font-normal"> &mdash; </span>
+                                    <span
+                                      className={
+                                        isRedeemed
+                                          ? 'text-[#667085]'
+                                          : isUnlocked
+                                          ? 'text-[#0E7A36]'
+                                          : 'text-[#667085]'
+                                      }
+                                    >
+                                      {isRedeemed ? 'REDEEMED' : isUnlocked ? 'READY' : 'LOCKED'}
+                                    </span>
+                                  </>
+                                ) : (
+                                  `Visit ${m.visitNumber}`
+                                )}
+                              </p>
+                              <p className="text-xs text-[#667085] mt-0.5">
+                                After {m.visitNumber} qualifying visit{m.visitNumber !== 1 ? 's' : ''}
+                              </p>
+                              {isReward && (
+                                <p className="text-xs text-[#172033] font-medium mt-0.5 truncate">
+                                  {getMilestoneRewardDetail(m)}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          {isReward && m.rewardDescription && (
-                            <p className="text-xs text-[#667085] mt-0.5 truncate">
-                              {m.rewardDescription}
-                            </p>
-                          )}
-                          {!isReward && (
-                            <p className="text-xs text-[#667085]">Checkpoint</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  }
-                )}
+                        );
+                      }
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </section>
         )}
 
@@ -1037,8 +1266,8 @@ export const LoyaltyPass: React.FC = () => {
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-[#172033]">
-                          Visit #{visit.visitNumberInCycle}
-                          <span className="text-[#667085] text-xs ml-1">· Cycle {visit.cycleNumber}</span>
+                          Stamp #{visit.visitNumberInCycle || 1}
+                          <span className="text-[#667085] text-xs ml-1.5">· {formatDate(visit.createdAt)}</span>
                         </p>
                       </div>
                     </div>
@@ -1074,19 +1303,28 @@ export const LoyaltyPass: React.FC = () => {
             </div>
           </div>
 
-          <div className="text-center">
-            <p className="text-xs text-[#667085]">
-              Powered by <span className="font-semibold text-[#172033]">RetainPulse</span>
-            </p>
+          <div className="text-center flex items-center justify-center gap-1.5 py-1">
+            <span className="text-xs text-[#667085]">Powered by</span>
+            <AaoLogo variant="full" size="xs" className="h-4.5 w-auto inline-block" />
+            <span className="text-xs text-[#667085]">• Scan. Earn. Come Again.</span>
           </div>
         </footer>
       </div>
 
-      {/* Reward QR Code Modal */}
+      {/* Reward QR Code Modal (for existing unlocked rewards) */}
       <RewardQrModal
         reward={selectedRewardForQr}
         businessName={loyaltyData?.business.name || publicData?.business.name}
         onClose={() => setSelectedRewardForQr(null)}
+      />
+
+      {/* Claim Reward QR Code Modal (for Claim Reward Visit flow) */}
+      <ClaimRewardQrModal
+        claim={activeClaim}
+        isRedeemed={isClaimRedeemed}
+        onClose={() => {
+          setActiveClaim(null);
+        }}
       />
     </div>
   );

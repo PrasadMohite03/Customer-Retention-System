@@ -17,6 +17,7 @@ export class QrService {
         business: true,
         loyaltyPrograms: {
           where: { isActive: true },
+          orderBy: { createdAt: 'desc' },
           include: {
             milestones: {
               where: { isEnabled: true },

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import { branchService } from '../../services/branchService';
 import {
   ArrowLeft,
@@ -13,26 +14,28 @@ import {
   Loader2,
   Save,
   RotateCcw,
-  Fingerprint,
   Calendar,
   Power,
   RefreshCw,
-  Info,
   Sparkles,
   ChevronRight,
+  Download,
+  Printer,
+  X,
+  ExternalLink,
 } from 'lucide-react';
 
 export const BranchDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
-
+  const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [copiedToken, setCopiedToken] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   const {
     data: branch,
@@ -106,20 +109,172 @@ export const BranchDetail: React.FC = () => {
     setFormError(null);
   };
 
-  const handleCopyToken = () => {
-    if (branch) {
-      navigator.clipboard.writeText(branch.qrToken);
-      setCopiedToken(true);
-      setTimeout(() => setCopiedToken(false), 2000);
-    }
-  };
-
   const scanUrl = branch ? `${window.location.origin}/loyalty/${branch.qrToken}` : '';
 
   const handleCopyScanUrl = () => {
+    if (!scanUrl) return;
     navigator.clipboard.writeText(scanUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const handleDownloadQr = () => {
+    if (!branch) return;
+    const canvas = qrCanvasRef.current;
+    if (!canvas) return;
+
+    const pngUrl = canvas.toDataURL('image/png');
+    const safeBranchName = branch.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    const downloadLink = document.createElement('a');
+    downloadLink.download = `${safeBranchName || 'branch'}-loyalty-qr.png`;
+    downloadLink.href = pngUrl;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+  };
+
+  const handleExecutePrint = () => {
+    if (!branch) return;
+    const canvas = qrCanvasRef.current;
+    const qrDataUrl = canvas ? canvas.toDataURL('image/png') : '';
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${branch.name} - AAO Loyalty QR</title>
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 15mm;
+            }
+            * {
+              box-sizing: border-box;
+              margin: 0;
+              padding: 0;
+            }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              background: #ffffff;
+              color: #172033;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              min-height: 100vh;
+              padding: 24px;
+            }
+            .standee {
+              width: 100%;
+              max-width: 440px;
+              border: 2px solid #e2e8f0;
+              border-radius: 28px;
+              padding: 44px 32px;
+              text-align: center;
+              background: #ffffff;
+            }
+            .brand-pill {
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              background: #f8fafc;
+              border: 1px solid #e2e8f0;
+              padding: 6px 16px;
+              border-radius: 9999px;
+              font-size: 13px;
+              font-weight: 700;
+              color: #0f172a;
+              margin-bottom: 24px;
+            }
+            .brand-dot {
+              width: 8px;
+              height: 8px;
+              border-radius: 50%;
+              background: #FFD444;
+            }
+            .branch-name {
+              font-size: 26px;
+              font-weight: 800;
+              color: #0f172a;
+              line-height: 1.25;
+              margin-bottom: 8px;
+            }
+            .subtitle {
+              font-size: 15px;
+              font-weight: 500;
+              color: #64748b;
+              margin-bottom: 30px;
+            }
+            .qr-box {
+              display: inline-block;
+              background: #ffffff;
+              border: 2px solid #f1f5f9;
+              border-radius: 22px;
+              padding: 20px;
+              margin-bottom: 26px;
+            }
+            .qr-img {
+              width: 250px;
+              height: 250px;
+              display: block;
+            }
+            .tagline {
+              font-size: 17px;
+              font-weight: 700;
+              color: #0f172a;
+              margin-bottom: 6px;
+            }
+            .instruction {
+              font-size: 13px;
+              color: #94a3b8;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="standee">
+            <div class="brand-pill">
+              <span class="brand-dot"></span>
+              AAO
+            </div>
+            <h1 class="branch-name">${branch.name}</h1>
+            <p class="subtitle">Scan to join our loyalty program</p>
+            <div class="qr-box">
+              <img src="${qrDataUrl}" class="qr-img" alt="Branch Loyalty QR" />
+            </div>
+            <div class="tagline">Scan. Earn. Come Again.</div>
+            <div class="instruction">Open your phone camera or QR scanner to check in</div>
+          </div>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    iframe.contentWindow?.focus();
+    setTimeout(() => {
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+      }, 1000);
+    }, 250);
   };
 
   if (isLoading) {
@@ -163,6 +318,17 @@ export const BranchDetail: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Hidden high-res canvas used for clean PNG export and printable standee */}
+      <div style={{ display: 'none' }}>
+        <QRCodeCanvas
+          ref={qrCanvasRef}
+          value={scanUrl}
+          size={1024}
+          level="H"
+          marginSize={2}
+        />
+      </div>
+
       {/* Top Breadcrumb & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -177,18 +343,20 @@ export const BranchDetail: React.FC = () => {
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">{branch.name}</h1>
               {branch.isActive ? (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                   Active
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                   Inactive
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">Branch details, operational status, and QR identification</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Branch details, operational status, and customer check-in QR
+            </p>
           </div>
         </div>
 
@@ -220,14 +388,14 @@ export const BranchDetail: React.FC = () => {
       )}
 
       {/* Main Grid: Details + QR Card */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Edit Form & Metadata */}
-        <div className="lg:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Left Column: Branch Information Form & Details */}
+        <div className="lg:col-span-6 space-y-6">
           {/* Edit Form Card */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
             <div className="px-6 py-4.5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <Store className="w-4 h-4 text-indigo-600" />
+                <Store className="w-4 h-4 text-slate-700" />
                 <h2 className="text-sm font-semibold text-slate-900">Branch Information</h2>
               </div>
               {isDirty && (
@@ -253,7 +421,7 @@ export const BranchDetail: React.FC = () => {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-slate-800"
+                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800 text-slate-800"
                   required
                 />
               </div>
@@ -267,162 +435,157 @@ export const BranchDetail: React.FC = () => {
                   onChange={(e) => setAddress(e.target.value)}
                   rows={3}
                   placeholder="e.g. 100 Main Street, Suite 4, Downtown"
-                  className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-slate-800 resize-none"
+                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800 text-slate-800 resize-none"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  disabled={!isDirty || updateMutation.isPending}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors disabled:opacity-40 cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset</span>
-                </button>
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Updated {new Date(branch.updatedAt).toLocaleDateString()}</span>
+                </div>
 
-                <button
-                  type="submit"
-                  disabled={!isDirty || updateMutation.isPending}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-2xs disabled:opacity-40 cursor-pointer"
-                >
-                  {updateMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Saving...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-3.5 h-3.5" />
-                      <span>Save Changes</span>
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    disabled={!isDirty || updateMutation.isPending}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors disabled:opacity-40 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset</span>
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={!isDirty || updateMutation.isPending}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-slate-900 bg-[#FFD444] hover:bg-[#FACC15] rounded-lg transition-colors shadow-2xs disabled:opacity-40 cursor-pointer"
+                  >
+                    {updateMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Save Changes</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
 
-          {/* System Identifiers & Auditing */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              System Scopes & Timestamps
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                  <Fingerprint className="w-3.5 h-3.5" />
-                  Branch ID
-                </span>
-                <p className="text-xs font-mono text-slate-700 bg-slate-50 p-2 rounded-lg border border-slate-100 mt-1 select-all break-all">
-                  {branch.id}
-                </p>
+          {/* Loyalty Program Navigation Link */}
+          <Link
+            to={`/owner/branches/${id}/loyalty-program`}
+            className="group flex items-center justify-between gap-4 bg-white border border-slate-200 rounded-2xl p-5 hover:border-slate-300 hover:shadow-xs transition-all"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center flex-shrink-0 shadow-2xs">
+                <Sparkles className="w-4 h-4 text-[#FFD444]" />
               </div>
-
               <div>
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                  <Fingerprint className="w-3.5 h-3.5" />
-                  Business Tenant Scope
-                </span>
-                <p className="text-xs font-mono text-indigo-700 bg-indigo-50/50 p-2 rounded-lg border border-indigo-100 mt-1 select-all break-all">
-                  {branch.businessId}
-                </p>
-              </div>
-
-              <div>
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5" />
-                  Created
-                </span>
-                <p className="text-xs text-slate-700 mt-1 font-mono">
-                  {new Date(branch.createdAt).toLocaleString()}
-                </p>
-              </div>
-
-              <div>
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5" />
-                  Last Updated
-                </span>
-                <p className="text-xs text-slate-700 mt-1 font-mono">
-                  {new Date(branch.updatedAt).toLocaleString()}
+                <h3 className="text-sm font-semibold text-slate-900">Branch Loyalty Program</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Configure stamps, rewards, and milestone criteria for this branch
                 </p>
               </div>
             </div>
-          </div>
+            <ChevronRight className="w-5 h-5 text-slate-400 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
+          </Link>
         </div>
 
-        {/* Right 1 Col: Branch QR Identification */}
-        <div className="space-y-6">
+        {/* Right Column: Branch Check-in QR */}
+        <div className="lg:col-span-6 space-y-6">
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-5">
-            <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-              <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
-                <QrCode className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900">Branch QR Code</h3>
-                <p className="text-xs text-slate-500">Unique check-in token for customer visits</p>
-              </div>
-            </div>
-
-            {/* QR Visual Card */}
-            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-6 flex flex-col items-center justify-center text-center">
-              <div className="w-36 h-36 bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-col items-center justify-center relative">
-                {/* Clean QR Visual Representation */}
-                <div className="w-full h-full border-2 border-dashed border-indigo-200 rounded-lg flex flex-col items-center justify-center p-2 bg-indigo-50/20">
-                  <QrCode className="w-16 h-16 text-indigo-600" />
-                  <span className="text-[9px] font-semibold text-indigo-700 mt-1 uppercase tracking-wider">
-                    {branch.name.slice(0, 14)}
-                  </span>
+            {/* Header: Title + Status */}
+            <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200/80 text-slate-800 flex items-center justify-center">
+                  <QrCode className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Branch Check-in QR</h3>
+                  <p className="text-xs text-slate-500">In-store counter QR for customer visits</p>
                 </div>
               </div>
 
-              <span className="text-xs font-semibold text-slate-800 mt-3">{branch.name}</span>
-              <span className="text-[11px] text-slate-400">Branch Check-in Code</span>
+              {branch.isActive ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  Active
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                  <span className="w-2 h-2 rounded-full bg-slate-400" />
+                  Inactive
+                </span>
+              )}
             </div>
 
-            {/* QR Token Value with Copy */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                  QR Token String
-                </span>
+            {/* Inactive Branch Alert */}
+            {!branch.isActive && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl p-3.5 flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-semibold text-amber-900">Branch is currently inactive</p>
+                  <p className="text-amber-700">Customers cannot use this QR while the branch is inactive.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Real QR Display Box */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-6 flex flex-col items-center justify-center text-center">
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col items-center justify-center">
+                <QRCodeSVG
+                  value={scanUrl}
+                  size={200}
+                  level="H"
+                  includeMargin={false}
+                  className="w-44 h-44 sm:w-48 sm:h-48 block"
+                />
+              </div>
+
+              <h4 className="text-base font-bold text-slate-900 mt-4">{branch.name}</h4>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Customers scan this QR to access your loyalty program.
+              </p>
+
+              {/* Action Buttons: Download + Print */}
+              <div className="grid grid-cols-2 gap-3 w-full max-w-sm mt-5">
                 <button
                   type="button"
-                  onClick={handleCopyToken}
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                  onClick={handleDownloadQr}
+                  className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 shadow-2xs transition-colors cursor-pointer"
                 >
-                  {copiedToken ? (
-                    <>
-                      <Check className="w-3 h-3 text-emerald-600" />
-                      <span className="text-emerald-600">Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3 h-3" />
-                      <span>Copy Token</span>
-                    </>
-                  )}
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download QR</span>
                 </button>
-              </div>
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
-                <p className="text-xs font-mono text-slate-700 break-all select-all">
-                  {branch.qrToken}
-                </p>
+
+                <button
+                  type="button"
+                  onClick={() => setShowPrintModal(true)}
+                  className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-slate-900 hover:bg-slate-800 text-white shadow-2xs transition-colors cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5 text-[#FFD444]" />
+                  <span>Print QR</span>
+                </button>
               </div>
             </div>
 
-            {/* Scan URL preview */}
+            {/* Customer Check-in Link Field with Copy */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                  Customer Scan Link
-                </span>
+                <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  Customer Check-in Link
+                </label>
                 <button
                   type="button"
                   onClick={handleCopyScanUrl}
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 hover:text-slate-900 transition-colors cursor-pointer"
                 >
                   {copiedLink ? (
                     <>
@@ -432,72 +595,145 @@ export const BranchDetail: React.FC = () => {
                   ) : (
                     <>
                       <Copy className="w-3 h-3" />
-                      <span>Copy Link</span>
+                      <span>Copy</span>
                     </>
                   )}
                 </button>
               </div>
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
-                <p className="text-xs font-mono text-slate-600 break-all select-all">
+
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                <p className="text-xs font-mono text-slate-700 truncate select-all flex-1">
                   {scanUrl}
                 </p>
+                <a
+                  href={scanUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Open loyalty pass"
+                  className="text-slate-400 hover:text-slate-600 transition-colors p-1"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
               </div>
             </div>
 
-            {/* Architectural Resolution Diagram */}
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2 text-xs">
-              <div className="flex items-center gap-1.5 text-slate-700 font-semibold text-[11px] uppercase tracking-wider">
-                <Info className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Resolution Pipeline</span>
-              </div>
-              <div className="space-y-1.5 font-mono text-[11px] text-slate-600 bg-white p-2.5 rounded-lg border border-slate-200/60">
-                <div className="flex items-center gap-1.5 text-indigo-600 font-medium">
-                  <span>1. QR Token</span>
-                  <span className="text-slate-400">→</span>
-                  <span className="truncate">{branch.qrToken.slice(0, 10)}...</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-slate-700 font-medium">
-                  <span>2. Branch</span>
-                  <span className="text-slate-400">→</span>
-                  <span className="truncate">{branch.name}</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-indigo-600 font-medium">
-                  <span>3. Program</span>
-                  <span className="text-slate-400">→</span>
-                  <Link
-                    to={`/owner/branches/${id}/loyalty-program`}
-                    className="text-indigo-600 hover:underline truncate"
-                  >
-                    Manage Loyalty Program
-                  </Link>
-                </div>
-              </div>
-              <p className="text-[11px] text-slate-500 leading-relaxed">
-                When scanned by a customer, this QR token resolves directly to this branch and its active loyalty program.
-              </p>
+            {/* How customer check-in works section */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 space-y-2.5">
+              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                How customer check-in works
+              </span>
+              <ol className="space-y-2 text-xs text-slate-600">
+                <li className="flex items-center gap-2.5">
+                  <span className="w-5 h-5 rounded-full bg-white border border-slate-200 text-slate-700 font-bold text-[10px] flex items-center justify-center shrink-0">
+                    1
+                  </span>
+                  <span>Customer scans the QR</span>
+                </li>
+                <li className="flex items-center gap-2.5">
+                  <span className="w-5 h-5 rounded-full bg-white border border-slate-200 text-slate-700 font-bold text-[10px] flex items-center justify-center shrink-0">
+                    2
+                  </span>
+                  <span>Loyalty pass opens</span>
+                </li>
+                <li className="flex items-center gap-2.5">
+                  <span className="w-5 h-5 rounded-full bg-white border border-slate-200 text-slate-700 font-bold text-[10px] flex items-center justify-center shrink-0">
+                    3
+                  </span>
+                  <span>Customer requests a stamp</span>
+                </li>
+                <li className="flex items-center gap-2.5">
+                  <span className="w-5 h-5 rounded-full bg-white border border-slate-200 text-slate-700 font-bold text-[10px] flex items-center justify-center shrink-0">
+                    4
+                  </span>
+                  <span>Staff approves the visit</span>
+                </li>
+              </ol>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Loyalty Program Navigation Card */}
-      <Link
-        to={`/owner/branches/${id}/loyalty-program`}
-        className="group flex items-center justify-between gap-4 bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-200 rounded-2xl p-5 hover:shadow-md hover:border-indigo-300 transition-all"
-      >
-        <div className="flex items-center gap-4">
-          <div className="w-11 h-11 bg-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">Loyalty Program</h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Configure milestones, rewards, and cycle length for this branch
-            </p>
+      {/* Print Standee Preview Modal */}
+      {showPrintModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Printer className="w-4 h-4 text-slate-700" />
+                <h3 className="text-sm font-bold text-slate-900">Print Counter QR Standee</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPrintModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Standee Preview Card */}
+            <div className="p-6 bg-slate-50 flex items-center justify-center">
+              <div className="bg-white border-2 border-slate-200 rounded-3xl p-7 text-center w-full max-w-sm shadow-sm space-y-4">
+                {/* Brand pill */}
+                <div className="inline-flex items-center gap-2 bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-full text-xs font-bold text-slate-800">
+                  <span className="w-2 h-2 rounded-full bg-[#FFD444]" />
+                  AAO
+                </div>
+
+                <div>
+                  <h4 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                    {branch.name}
+                  </h4>
+                  <p className="text-xs font-medium text-slate-500 mt-1">
+                    Scan to join our loyalty program
+                  </p>
+                </div>
+
+                <div className="bg-white border-2 border-slate-100 rounded-2xl p-4 inline-block shadow-2xs">
+                  <QRCodeSVG
+                    value={scanUrl}
+                    size={190}
+                    level="H"
+                    includeMargin={false}
+                    className="w-44 h-44 block"
+                  />
+                </div>
+
+                <div className="pt-1">
+                  <p className="text-sm font-bold text-slate-900">Collect stamps. Unlock rewards.</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Open camera or QR scanner on your phone
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="px-6 py-4 bg-white border-t border-slate-100 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowPrintModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-white border border-slate-200 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  handleExecutePrint();
+                  setShowPrintModal(false);
+                }}
+                className="inline-flex items-center gap-2 px-5 py-2 text-xs font-semibold text-slate-900 bg-[#FFD444] hover:bg-[#FACC15] rounded-xl shadow-2xs transition-colors cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print Now</span>
+              </button>
+            </div>
           </div>
         </div>
-        <ChevronRight className="w-5 h-5 text-indigo-400 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
-      </Link>
+      )}
     </div>
   );
 };

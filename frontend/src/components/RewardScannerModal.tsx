@@ -11,9 +11,15 @@ import {
   User,
   Phone,
   Calendar,
+  Gift,
 } from 'lucide-react';
 import { staffService } from '../services/staffService';
-import type { ValidatedRewardTokenInfo, RedeemedRewardTokenResult } from '../services/staffService';
+import type {
+  ValidatedRewardTokenInfo,
+  RedeemedRewardTokenResult,
+  ValidatedRewardClaimInfo,
+  ConfirmedRewardClaimResult,
+} from '../services/staffService';
 
 interface RewardScannerModalProps {
   isOpen: boolean;
@@ -22,6 +28,7 @@ interface RewardScannerModalProps {
 }
 
 type Step = 'SCAN' | 'VALIDATING' | 'CONFIRM' | 'REDEEMING' | 'SUCCESS' | 'ERROR';
+type TokenType = 'REWARD' | 'CLAIM';
 
 export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
   isOpen,
@@ -32,8 +39,11 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
   const [mode, setMode] = useState<'CAMERA' | 'MANUAL'>('CAMERA');
   const [manualToken, setManualToken] = useState<string>('');
   const [activeToken, setActiveToken] = useState<string>('');
+  const [tokenType, setTokenType] = useState<TokenType>('REWARD');
   const [validatedReward, setValidatedReward] = useState<ValidatedRewardTokenInfo | null>(null);
   const [redeemedResult, setRedeemedResult] = useState<RedeemedRewardTokenResult | null>(null);
+  const [validatedClaim, setValidatedClaim] = useState<ValidatedRewardClaimInfo | null>(null);
+  const [confirmedClaim, setConfirmedClaim] = useState<ConfirmedRewardClaimResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
@@ -55,20 +65,29 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
   const handleValidateToken = useCallback(
     async (token: string) => {
       await stopScanner();
-      setActiveToken(token);
+      const trimmed = token.trim().toUpperCase();
+      setActiveToken(trimmed);
       setStep('VALIDATING');
       setErrorMessage(null);
 
       try {
-        const rewardInfo = await staffService.validateRewardToken(token.trim());
-        setValidatedReward(rewardInfo);
-        setStep('CONFIRM');
+        if (trimmed.startsWith('RC-')) {
+          setTokenType('CLAIM');
+          const claimInfo = await staffService.validateRewardClaim(trimmed);
+          setValidatedClaim(claimInfo);
+          setStep('CONFIRM');
+        } else {
+          setTokenType('REWARD');
+          const rewardInfo = await staffService.validateRewardToken(trimmed);
+          setValidatedReward(rewardInfo);
+          setStep('CONFIRM');
+        }
       } catch (err: any) {
         const msg =
           err.response?.data?.error?.message ||
           err.response?.data?.message ||
           err.message ||
-          'Failed to validate reward token';
+          'Failed to validate token';
         setErrorMessage(msg);
         setStep('ERROR');
       }
@@ -142,8 +161,11 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
       setMode('CAMERA');
       setManualToken('');
       setActiveToken('');
+      setTokenType('REWARD');
       setValidatedReward(null);
       setRedeemedResult(null);
+      setValidatedClaim(null);
+      setConfirmedClaim(null);
       setErrorMessage(null);
       setCameraError(null);
     }
@@ -157,16 +179,23 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
     setErrorMessage(null);
 
     try {
-      const result = await staffService.redeemRewardByToken(activeToken.trim());
-      setRedeemedResult(result);
-      setStep('SUCCESS');
-      onSuccess();
+      if (tokenType === 'CLAIM') {
+        const result = await staffService.confirmRewardClaim(activeToken.trim());
+        setConfirmedClaim(result);
+        setStep('SUCCESS');
+        onSuccess();
+      } else {
+        const result = await staffService.redeemRewardByToken(activeToken.trim());
+        setRedeemedResult(result);
+        setStep('SUCCESS');
+        onSuccess();
+      }
     } catch (err: any) {
       const msg =
         err.response?.data?.error?.message ||
         err.response?.data?.message ||
         err.message ||
-        'Failed to redeem reward';
+        'Failed to process transaction';
       setErrorMessage(msg);
       setStep('ERROR');
     }
@@ -176,8 +205,11 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
     setStep('SCAN');
     setManualToken('');
     setActiveToken('');
+    setTokenType('REWARD');
     setValidatedReward(null);
     setRedeemedResult(null);
+    setValidatedClaim(null);
+    setConfirmedClaim(null);
     setErrorMessage(null);
   };
 
@@ -265,18 +297,18 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
               >
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Reward Redemption Code
+                    Redemption or Claim Code
                   </label>
                   <input
                     type="text"
                     value={manualToken}
                     onChange={(e) => setManualToken(e.target.value.toUpperCase())}
-                    placeholder="RP-XXXX-XXXX-XXXX"
+                    placeholder="RC-XXXX-... or RP-XXXX-..."
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono tracking-wider focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:bg-white uppercase"
                     autoFocus
                   />
                   <p className="text-[11px] text-slate-400 mt-1">
-                    Enter the 16-character code shown on customer's phone
+                    Enter the code shown on customer's phone (starts with RC- or RP-)
                   </p>
                 </div>
 
@@ -296,13 +328,90 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
         {step === 'VALIDATING' && (
           <div className="py-12 flex flex-col items-center justify-center space-y-3">
             <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-            <p className="text-sm font-semibold text-slate-700">Validating reward token...</p>
-            <p className="text-xs text-slate-400">Verifying status and business authorization</p>
+            <p className="text-sm font-semibold text-slate-700">Validating token...</p>
+            <p className="text-xs text-slate-400">Verifying customer status and branch authorization</p>
           </div>
         )}
 
         {/* ─── STEP 3: CONFIRMATION UI ─────────────────────────────────── */}
-        {step === 'CONFIRM' && validatedReward && (
+        {step === 'CONFIRM' && tokenType === 'CLAIM' && validatedClaim && (
+          <div className="py-4 space-y-4">
+            <div className="bg-[#FFFDF5] border border-[#FFD444] rounded-2xl p-4 text-center">
+              <span className="inline-block px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider bg-[#FFD444] text-[#172033] rounded-md mb-1.5">
+                CLAIM REWARD VISIT
+              </span>
+              <h4 className="text-lg font-black text-slate-900 leading-tight">Complete Reward Visit?</h4>
+              <p className="text-xs text-slate-600 mt-1">
+                One-step visit recording and immediate reward redemption.
+              </p>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between text-slate-600">
+                <span className="flex items-center gap-1.5 text-slate-400 font-medium">
+                  <User className="w-3.5 h-3.5" />
+                  <span>Customer:</span>
+                </span>
+                <span className="font-bold text-slate-800 text-sm">{validatedClaim.customerName}</span>
+              </div>
+
+              <div className="flex items-center justify-between text-slate-600">
+                <span className="flex items-center gap-1.5 text-slate-400 font-medium">
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>Phone:</span>
+                </span>
+                <span className="font-mono text-slate-800">{validatedClaim.customerPhone}</span>
+              </div>
+
+              <div className="flex items-center justify-between text-slate-600 border-t border-slate-200/60 pt-2">
+                <span className="flex items-center gap-1.5 text-slate-400 font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Visit:</span>
+                </span>
+                <span className="font-bold text-slate-900">
+                  {validatedClaim.expectedVisitNumber} of {validatedClaim.cycleLength}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-slate-600 border-t border-slate-200/60 pt-2">
+                <span className="flex items-center gap-1.5 text-slate-400 font-medium">
+                  <Gift className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Reward:</span>
+                </span>
+                <span className="font-bold text-emerald-700 text-sm">{validatedClaim.rewardName}</span>
+              </div>
+              {validatedClaim.rewardValue && (
+                <div className="text-right text-[11px] font-semibold text-slate-500">
+                  Value: {validatedClaim.rewardValue}
+                </div>
+              )}
+            </div>
+
+            <p className="text-[11px] text-slate-500 text-center font-medium">
+              No second scan. Staff confirmation completes the qualifying visit and redeems the reward.
+            </p>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleReset}
+                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRedeem}
+                className="flex-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Confirm & Redeem</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'CONFIRM' && tokenType === 'REWARD' && validatedReward && (
           <div className="py-4 space-y-4">
             <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center">
               <span className="inline-block px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 text-white rounded-md mb-2">
@@ -375,13 +484,49 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
         {step === 'REDEEMING' && (
           <div className="py-12 flex flex-col items-center justify-center space-y-3">
             <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
-            <p className="text-sm font-semibold text-slate-700">Redeeming reward...</p>
+            <p className="text-sm font-semibold text-slate-700">
+              {tokenType === 'CLAIM' ? 'Recording visit and redeeming reward...' : 'Redeeming reward...'}
+            </p>
             <p className="text-xs text-slate-400">Recording operational redemption atomically</p>
           </div>
         )}
 
         {/* ─── STEP 5: SUCCESS ─────────────────────────────────────────── */}
-        {step === 'SUCCESS' && redeemedResult && (
+        {step === 'SUCCESS' && tokenType === 'CLAIM' && confirmedClaim && (
+          <div className="py-6 text-center space-y-4">
+            <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+
+            <div>
+              <h4 className="text-lg font-black text-slate-900">Visit & Reward Completed!</h4>
+              <p className="text-sm font-bold text-emerald-700 mt-1">
+                {confirmedClaim.reward.rewardName} redeemed
+              </p>
+              <p className="text-xs text-slate-600 mt-1">
+                Customer: <span className="font-semibold text-slate-800">{confirmedClaim.customer.name}</span> • Visit #{confirmedClaim.visitNumberInCycle} recorded
+              </p>
+              {confirmedClaim.cycleCompleted && (
+                <p className="text-xs font-bold text-amber-700 bg-amber-50 py-1 px-2.5 rounded-lg inline-block mt-2">
+                  🎉 Loyalty Cycle Completed!
+                </p>
+              )}
+              <p className="text-[11px] text-slate-400 mt-2">
+                Single atomic transaction complete. No second scan needed.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            >
+              Done
+            </button>
+          </div>
+        )}
+
+        {step === 'SUCCESS' && tokenType === 'REWARD' && redeemedResult && (
           <div className="py-6 text-center space-y-4">
             <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-8 h-8" />

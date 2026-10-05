@@ -1,8 +1,8 @@
 import React from 'react';
 import { NavLink, Outlet, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { AaoLogo } from '../components/ui/AaoBrand';
 import {
-  Sparkles,
   ShieldCheck,
   LogOut,
   LayoutDashboard,
@@ -54,12 +54,10 @@ export const OwnerLayout: React.FC = () => {
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur-md px-4 sm:px-8 py-3.5 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link to="/owner/dashboard" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-xs">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <div className="hidden sm:block">
-              <span className="font-semibold text-base text-slate-900 leading-tight">RetainPulse</span>
-              <span className="block text-[11px] text-slate-500 font-medium">Business Owner Portal</span>
+            <AaoLogo variant="icon" size="sm" />
+            <div>
+              <span className="font-black text-base text-[#172033] leading-tight block">AAO</span>
+              <span className="block text-[10px] text-[#667085] font-semibold uppercase tracking-wider">Business Owner Portal</span>
             </div>
           </Link>
         </div>
