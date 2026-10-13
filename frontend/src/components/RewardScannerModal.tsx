@@ -214,17 +214,17 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in">
-      <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl relative border border-slate-100 flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in">
+      <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-md w-full p-6 shadow-2xl relative border border-slate-100 flex flex-col overflow-hidden max-h-[90vh] sm:max-h-none overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <QrCode className="w-4 h-4" />
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-[#FFF8E1] text-[#172033] flex items-center justify-center border border-[#FFE08A]">
+              <QrCode className="w-5 h-5 text-[#172033]" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900">Scan Customer Reward</h3>
-              <p className="text-[11px] text-slate-400">Validate and redeem reward token</p>
+              <h3 className="text-base font-black text-[#172033]">Scan Customer Reward</h3>
+              <p className="text-[11px] text-[#667085]">Validate and redeem reward token</p>
             </div>
           </div>
 
@@ -245,10 +245,10 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
               <button
                 type="button"
                 onClick={() => setMode('CAMERA')}
-                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                   mode === 'CAMERA'
-                    ? 'bg-white text-indigo-600 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white text-[#172033] shadow-xs'
+                    : 'text-[#667085] hover:text-[#172033]'
                 }`}
               >
                 <Camera className="w-3.5 h-3.5" />
@@ -260,10 +260,10 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
                   stopScanner();
                   setMode('MANUAL');
                 }}
-                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                   mode === 'MANUAL'
-                    ? 'bg-white text-indigo-600 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white text-[#172033] shadow-xs'
+                    : 'text-[#667085] hover:text-[#172033]'
                 }`}
               >
                 <Keyboard className="w-3.5 h-3.5" />
@@ -276,11 +276,11 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
                 <div className="w-full relative rounded-2xl overflow-hidden bg-slate-950 flex flex-col items-center justify-center aspect-square max-h-64 border border-slate-200">
                   <div id="reward-qr-reader" className="w-full h-full" />
                 </div>
-                <p className="text-xs text-slate-500 mt-2 text-center">
+                <p className="text-xs text-[#667085] mt-2 text-center">
                   Point camera at customer's reward QR code
                 </p>
                 {cameraError && (
-                  <p className="text-xs text-rose-600 mt-2 text-center bg-rose-50 p-2 rounded-lg border border-rose-200">
+                  <p className="text-xs text-rose-600 mt-2 text-center bg-rose-50 p-2.5 rounded-xl border border-rose-200">
                     {cameraError}
                   </p>
                 )}
@@ -296,7 +296,7 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
                 className="space-y-3 pt-2"
               >
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className="block text-xs font-bold text-[#172033] mb-1">
                     Redemption or Claim Code
                   </label>
                   <input
@@ -304,10 +304,10 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
                     value={manualToken}
                     onChange={(e) => setManualToken(e.target.value.toUpperCase())}
                     placeholder="RC-XXXX-... or RP-XXXX-..."
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono tracking-wider focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:bg-white uppercase"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-sm font-mono tracking-wider focus:outline-hidden focus:ring-2 focus:ring-[#FFD444] focus:bg-white uppercase text-[#172033]"
                     autoFocus
                   />
-                  <p className="text-[11px] text-slate-400 mt-1">
+                  <p className="text-[11px] text-[#667085] mt-1">
                     Enter the code shown on customer's phone (starts with RC- or RP-)
                   </p>
                 </div>
@@ -315,7 +315,7 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
                 <button
                   type="submit"
                   disabled={!manualToken.trim()}
-                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  className="w-full py-3 bg-[#FFD444] hover:bg-[#F4EB6C] disabled:opacity-50 text-[#172033] rounded-xl text-xs font-black transition-colors cursor-pointer shadow-xs"
                 >
                   Validate Code
                 </button>
@@ -327,67 +327,67 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
         {/* ─── STEP 2: VALIDATING ──────────────────────────────────────── */}
         {step === 'VALIDATING' && (
           <div className="py-12 flex flex-col items-center justify-center space-y-3">
-            <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-            <p className="text-sm font-semibold text-slate-700">Validating token...</p>
-            <p className="text-xs text-slate-400">Verifying customer status and branch authorization</p>
+            <Loader2 className="w-8 h-8 text-[#172033] animate-spin" />
+            <p className="text-sm font-bold text-[#172033]">Validating token...</p>
+            <p className="text-xs text-[#667085]">Verifying customer status and branch authorization</p>
           </div>
         )}
 
         {/* ─── STEP 3: CONFIRMATION UI ─────────────────────────────────── */}
         {step === 'CONFIRM' && tokenType === 'CLAIM' && validatedClaim && (
           <div className="py-4 space-y-4">
-            <div className="bg-[#FFFDF5] border border-[#FFD444] rounded-2xl p-4 text-center">
-              <span className="inline-block px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider bg-[#FFD444] text-[#172033] rounded-md mb-1.5">
+            <div className="bg-[#FFFDF5] border border-[#FFE08A] rounded-2xl p-4 text-center">
+              <span className="inline-block px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider bg-[#FFD444] text-[#172033] rounded-md mb-1.5">
                 CLAIM REWARD VISIT
               </span>
-              <h4 className="text-lg font-black text-slate-900 leading-tight">Complete Reward Visit?</h4>
-              <p className="text-xs text-slate-600 mt-1">
+              <h4 className="text-lg font-black text-[#172033] leading-tight">Complete Reward Visit?</h4>
+              <p className="text-xs text-[#667085] mt-1">
                 One-step visit recording and immediate reward redemption.
               </p>
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5 text-xs">
-              <div className="flex items-center justify-between text-slate-600">
-                <span className="flex items-center gap-1.5 text-slate-400 font-medium">
+            <div className="bg-slate-50 border border-[#E5E7EB] rounded-2xl p-4 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between text-[#667085]">
+                <span className="flex items-center gap-1.5 text-[#667085] font-medium">
                   <User className="w-3.5 h-3.5" />
                   <span>Customer:</span>
                 </span>
-                <span className="font-bold text-slate-800 text-sm">{validatedClaim.customerName}</span>
+                <span className="font-bold text-[#172033] text-sm">{validatedClaim.customerName}</span>
               </div>
 
-              <div className="flex items-center justify-between text-slate-600">
-                <span className="flex items-center gap-1.5 text-slate-400 font-medium">
+              <div className="flex items-center justify-between text-[#667085]">
+                <span className="flex items-center gap-1.5 text-[#667085] font-medium">
                   <Phone className="w-3.5 h-3.5" />
                   <span>Phone:</span>
                 </span>
-                <span className="font-mono text-slate-800">{validatedClaim.customerPhone}</span>
+                <span className="font-mono text-[#172033]">{validatedClaim.customerPhone}</span>
               </div>
 
-              <div className="flex items-center justify-between text-slate-600 border-t border-slate-200/60 pt-2">
-                <span className="flex items-center gap-1.5 text-slate-400 font-medium">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <div className="flex items-center justify-between text-[#667085] border-t border-[#E5E7EB] pt-2">
+                <span className="flex items-center gap-1.5 text-[#667085] font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#0E7A36]" />
                   <span>Visit:</span>
                 </span>
-                <span className="font-bold text-slate-900">
+                <span className="font-bold text-[#172033]">
                   {validatedClaim.expectedVisitNumber} of {validatedClaim.cycleLength}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-slate-600 border-t border-slate-200/60 pt-2">
-                <span className="flex items-center gap-1.5 text-slate-400 font-medium">
-                  <Gift className="w-3.5 h-3.5 text-amber-600" />
+              <div className="flex items-center justify-between text-[#667085] border-t border-[#E5E7EB] pt-2">
+                <span className="flex items-center gap-1.5 text-[#667085] font-medium">
+                  <Gift className="w-3.5 h-3.5 text-[#FFD444]" />
                   <span>Reward:</span>
                 </span>
-                <span className="font-bold text-emerald-700 text-sm">{validatedClaim.rewardName}</span>
+                <span className="font-bold text-[#0E7A36] text-sm">{validatedClaim.rewardName}</span>
               </div>
               {validatedClaim.rewardValue && (
-                <div className="text-right text-[11px] font-semibold text-slate-500">
+                <div className="text-right text-[11px] font-semibold text-[#667085]">
                   Value: {validatedClaim.rewardValue}
                 </div>
               )}
             </div>
 
-            <p className="text-[11px] text-slate-500 text-center font-medium">
+            <p className="text-[11px] text-[#667085] text-center font-medium">
               No second scan. Staff confirmation completes the qualifying visit and redeems the reward.
             </p>
 
@@ -395,16 +395,16 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
               <button
                 type="button"
                 onClick={handleReset}
-                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-[#172033] rounded-xl text-xs font-bold transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmRedeem}
-                className="flex-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                className="flex-2 py-2.5 px-4 bg-[#FFD444] hover:bg-[#F4EB6C] text-[#172033] rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
               >
-                <CheckCircle2 className="w-4 h-4" />
+                <CheckCircle2 className="w-4 h-4 text-[#0E7A36]" />
                 <span>Confirm & Redeem</span>
               </button>
             </div>
@@ -413,50 +413,50 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
 
         {step === 'CONFIRM' && tokenType === 'REWARD' && validatedReward && (
           <div className="py-4 space-y-4">
-            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center">
-              <span className="inline-block px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 text-white rounded-md mb-2">
+            <div className="bg-[#EAFBEF] border border-[#55E07E]/40 rounded-2xl p-4 text-center">
+              <span className="inline-block px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider bg-[#55E07E] text-[#172033] rounded-md mb-2">
                 VALID REWARD
               </span>
-              <h4 className="text-base font-bold text-slate-900">{validatedReward.rewardName}</h4>
+              <h4 className="text-base font-black text-[#172033]">{validatedReward.rewardName}</h4>
               {validatedReward.rewardDescription && (
-                <p className="text-xs text-slate-600 mt-0.5">{validatedReward.rewardDescription}</p>
+                <p className="text-xs text-[#667085] mt-0.5">{validatedReward.rewardDescription}</p>
               )}
               {validatedReward.rewardValue && (
-                <p className="text-xs font-bold text-emerald-700 mt-1">
+                <p className="text-xs font-bold text-[#0E7A36] mt-1">
                   Value: ${validatedReward.rewardValue}
                 </p>
               )}
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2 text-xs">
-              <div className="flex items-center justify-between text-slate-600">
-                <span className="flex items-center gap-1.5 text-slate-400">
+            <div className="bg-slate-50 border border-[#E5E7EB] rounded-2xl p-3.5 space-y-2 text-xs">
+              <div className="flex items-center justify-between text-[#667085]">
+                <span className="flex items-center gap-1.5 text-[#667085]">
                   <User className="w-3.5 h-3.5" />
                   <span>Customer:</span>
                 </span>
-                <span className="font-semibold text-slate-800">{validatedReward.customerName}</span>
+                <span className="font-bold text-[#172033]">{validatedReward.customerName}</span>
               </div>
 
-              <div className="flex items-center justify-between text-slate-600">
-                <span className="flex items-center gap-1.5 text-slate-400">
+              <div className="flex items-center justify-between text-[#667085]">
+                <span className="flex items-center gap-1.5 text-[#667085]">
                   <Phone className="w-3.5 h-3.5" />
                   <span>Phone:</span>
                 </span>
-                <span className="font-mono text-slate-800">{validatedReward.customerPhone}</span>
+                <span className="font-mono text-[#172033]">{validatedReward.customerPhone}</span>
               </div>
 
-              <div className="flex items-center justify-between text-slate-600">
-                <span className="flex items-center gap-1.5 text-slate-400">
+              <div className="flex items-center justify-between text-[#667085]">
+                <span className="flex items-center gap-1.5 text-[#667085]">
                   <Calendar className="w-3.5 h-3.5" />
                   <span>Unlocked:</span>
                 </span>
-                <span className="text-slate-800">
+                <span className="text-[#172033]">
                   {new Date(validatedReward.unlockedAt).toLocaleDateString()}
                 </span>
               </div>
             </div>
 
-            <p className="text-[11px] text-slate-500 text-center">
+            <p className="text-[11px] text-[#667085] text-center">
               Confirm only after applying the reward discount to customer's bill.
             </p>
 
@@ -464,16 +464,16 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
               <button
                 type="button"
                 onClick={handleReset}
-                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-[#172033] rounded-xl text-xs font-bold transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmRedeem}
-                className="flex-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                className="flex-2 py-2.5 px-4 bg-[#FFD444] hover:bg-[#F4EB6C] text-[#172033] rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
               >
-                <CheckCircle2 className="w-4 h-4" />
+                <CheckCircle2 className="w-4 h-4 text-[#0E7A36]" />
                 <span>Confirm Redemption</span>
               </button>
             </div>
@@ -483,35 +483,35 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
         {/* ─── STEP 4: REDEEMING ───────────────────────────────────────── */}
         {step === 'REDEEMING' && (
           <div className="py-12 flex flex-col items-center justify-center space-y-3">
-            <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
-            <p className="text-sm font-semibold text-slate-700">
+            <Loader2 className="w-8 h-8 text-[#172033] animate-spin" />
+            <p className="text-sm font-bold text-[#172033]">
               {tokenType === 'CLAIM' ? 'Recording visit and redeeming reward...' : 'Redeeming reward...'}
             </p>
-            <p className="text-xs text-slate-400">Recording operational redemption atomically</p>
+            <p className="text-xs text-[#667085]">Recording operational redemption atomically</p>
           </div>
         )}
 
         {/* ─── STEP 5: SUCCESS ─────────────────────────────────────────── */}
         {step === 'SUCCESS' && tokenType === 'CLAIM' && confirmedClaim && (
           <div className="py-6 text-center space-y-4">
-            <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+            <div className="w-14 h-14 rounded-2xl bg-[#EAFBEF] text-[#0E7A36] border border-[#55E07E]/30 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-8 h-8" />
             </div>
 
             <div>
-              <h4 className="text-lg font-black text-slate-900">Visit & Reward Completed!</h4>
-              <p className="text-sm font-bold text-emerald-700 mt-1">
+              <h4 className="text-lg font-black text-[#172033]">Visit & Reward Completed!</h4>
+              <p className="text-sm font-bold text-[#0E7A36] mt-1">
                 {confirmedClaim.reward.rewardName} redeemed
               </p>
-              <p className="text-xs text-slate-600 mt-1">
-                Customer: <span className="font-semibold text-slate-800">{confirmedClaim.customer.name}</span> • Visit #{confirmedClaim.visitNumberInCycle} recorded
+              <p className="text-xs text-[#667085] mt-1">
+                Customer: <span className="font-bold text-[#172033]">{confirmedClaim.customer.name}</span> • Visit #{confirmedClaim.visitNumberInCycle} recorded
               </p>
               {confirmedClaim.cycleCompleted && (
-                <p className="text-xs font-bold text-amber-700 bg-amber-50 py-1 px-2.5 rounded-lg inline-block mt-2">
+                <p className="text-xs font-bold text-[#172033] bg-[#FFF8E1] border border-[#FFE08A] py-1 px-3 rounded-lg inline-block mt-2">
                   🎉 Loyalty Cycle Completed!
                 </p>
               )}
-              <p className="text-[11px] text-slate-400 mt-2">
+              <p className="text-[11px] text-[#667085] mt-2">
                 Single atomic transaction complete. No second scan needed.
               </p>
             </div>
@@ -519,7 +519,7 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              className="w-full py-3 bg-[#FFD444] hover:bg-[#F4EB6C] text-[#172033] rounded-xl text-xs font-black transition-colors cursor-pointer shadow-xs"
             >
               Done
             </button>
@@ -528,16 +528,16 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
 
         {step === 'SUCCESS' && tokenType === 'REWARD' && redeemedResult && (
           <div className="py-6 text-center space-y-4">
-            <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+            <div className="w-14 h-14 rounded-2xl bg-[#EAFBEF] text-[#0E7A36] border border-[#55E07E]/30 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-8 h-8" />
             </div>
 
             <div>
-              <h4 className="text-lg font-bold text-slate-900">Reward Redeemed!</h4>
-              <p className="text-xs font-semibold text-emerald-700 mt-0.5">
+              <h4 className="text-lg font-black text-[#172033]">Reward Redeemed!</h4>
+              <p className="text-xs font-bold text-[#0E7A36] mt-0.5">
                 {redeemedResult.rewardName}
               </p>
-              <p className="text-[11px] text-slate-400 mt-1">
+              <p className="text-[11px] text-[#667085] mt-1">
                 Redemption successfully recorded at{' '}
                 {new Date(redeemedResult.redeemedAt).toLocaleTimeString()}
               </p>
@@ -546,7 +546,7 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              className="w-full py-3 bg-[#FFD444] hover:bg-[#F4EB6C] text-[#172033] rounded-xl text-xs font-black transition-colors cursor-pointer shadow-xs"
             >
               Done
             </button>
@@ -556,12 +556,12 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
         {/* ─── STEP 6: ERROR ───────────────────────────────────────────── */}
         {step === 'ERROR' && (
           <div className="py-6 text-center space-y-4">
-            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
               <AlertCircle className="w-6 h-6" />
             </div>
 
             <div>
-              <h4 className="text-base font-bold text-slate-900">Redemption Failed</h4>
+              <h4 className="text-base font-bold text-[#172033]">Redemption Failed</h4>
               <p className="text-xs text-rose-600 mt-1 bg-rose-50 p-2.5 rounded-xl border border-rose-100">
                 {errorMessage || 'An error occurred during redemption'}
               </p>
@@ -571,14 +571,14 @@ export const RewardScannerModal: React.FC<RewardScannerModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-[#172033] rounded-xl text-xs font-bold transition-colors cursor-pointer"
               >
                 Close
               </button>
               <button
                 type="button"
                 onClick={handleReset}
-                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                className="flex-1 py-2.5 bg-[#FFD444] hover:bg-[#F4EB6C] text-[#172033] rounded-xl text-xs font-black transition-colors cursor-pointer shadow-xs"
               >
                 Scan Another
               </button>

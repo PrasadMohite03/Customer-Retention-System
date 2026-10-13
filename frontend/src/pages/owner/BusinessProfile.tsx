@@ -2,17 +2,24 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { businessService } from '../../services/businessService';
 import {
-  Building2,
   Edit3,
   CheckCircle2,
   AlertCircle,
   Loader2,
   Calendar,
-  Layers,
-  Fingerprint,
   RefreshCw,
   X,
   Save,
+  Store,
+  Coffee,
+  Scissors,
+  Dumbbell,
+  Car,
+  Utensils,
+  Sparkles,
+  ChevronRight,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 export const BusinessProfile: React.FC = () => {
@@ -22,6 +29,7 @@ export const BusinessProfile: React.FC = () => {
   const [type, setType] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState(false);
 
   const {
     data: business,
@@ -88,24 +96,55 @@ export const BusinessProfile: React.FC = () => {
     });
   };
 
+  const handleCopyId = () => {
+    if (!business?.id) return;
+    navigator.clipboard.writeText(business.id);
+    setCopiedId(true);
+    setTimeout(() => setCopiedId(false), 2000);
+  };
+
+  const getCategoryIcon = (categoryType?: string | null) => {
+    if (!categoryType) return <Store className="w-5 h-5 stroke-[2.2]" />;
+    const normalized = categoryType.toUpperCase();
+    if (normalized.includes('CAFE') || normalized.includes('COFFEE')) {
+      return <Coffee className="w-5 h-5 stroke-[2.2]" />;
+    }
+    if (normalized.includes('RESTAURANT') || normalized.includes('DINING') || normalized.includes('FOOD')) {
+      return <Utensils className="w-5 h-5 stroke-[2.2]" />;
+    }
+    if (normalized.includes('SALON') || normalized.includes('BEAUTY') || normalized.includes('SPA') || normalized.includes('HAIR')) {
+      return <Scissors className="w-5 h-5 stroke-[2.2]" />;
+    }
+    if (normalized.includes('FITNESS') || normalized.includes('GYM')) {
+      return <Dumbbell className="w-5 h-5 stroke-[2.2]" />;
+    }
+    if (normalized.includes('CAR') || normalized.includes('AUTO')) {
+      return <Car className="w-5 h-5 stroke-[2.2]" />;
+    }
+    if (normalized.includes('WELLNESS')) {
+      return <Sparkles className="w-5 h-5 stroke-[2.2]" />;
+    }
+    return <Store className="w-5 h-5 stroke-[2.2]" />;
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-3">
-        <Loader2 className="w-7 h-7 text-indigo-600 animate-spin" />
-        <p className="text-xs text-slate-500 font-medium">Loading business profile...</p>
+        <Loader2 className="w-8 h-8 text-[#D97706] animate-spin" />
+        <p className="text-xs text-[#667085] font-bold">Loading business profile...</p>
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center max-w-lg mx-auto">
-        <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
-        <h3 className="text-sm font-semibold text-red-900">Failed to load business profile</h3>
-        <p className="text-xs text-red-600 mt-1">{(error as Error)?.message || 'An error occurred'}</p>
+      <div className="bg-[#FFFFFF] border border-rose-200 rounded-2xl p-6 text-center max-w-lg mx-auto shadow-xs">
+        <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-2" />
+        <h3 className="text-sm font-black text-[#172033]">Failed to load business profile</h3>
+        <p className="text-xs text-rose-600 mt-1">{(error as Error)?.message || 'An error occurred'}</p>
         <button
           onClick={() => refetch()}
-          className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors cursor-pointer"
+          className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-rose-600 hover:bg-rose-700 text-white transition-colors cursor-pointer"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           <span>Retry</span>
@@ -116,119 +155,135 @@ export const BusinessProfile: React.FC = () => {
 
   if (!business) return null;
 
-  return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Business Profile</h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Manage your primary brand identity and organization settings.
-          </p>
-        </div>
+  const branchCount = business.branchCount ?? 1;
 
-        {!isEditing && (
-          <button
-            onClick={handleStartEdit}
-            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-2xs cursor-pointer self-start sm:self-auto"
-          >
-            <Edit3 className="w-4 h-4" />
-            <span>Edit Profile</span>
-          </button>
-        )}
+  return (
+    <div className="space-y-5 sm:space-y-6">
+      {/* Top Header Card */}
+      <div className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-2xl p-5 sm:p-6 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-3.5 rounded-full bg-[#FFD444]" />
+              <span className="text-[10px] sm:text-xs font-black text-[#667085] uppercase tracking-wider">
+                Brand Details
+              </span>
+            </div>
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-[#172033] tracking-tight">
+              Business Profile
+            </h1>
+            <p className="text-xs sm:text-sm text-[#667085]">
+              Manage your business details and information.
+            </p>
+          </div>
+
+          {!isEditing && (
+            <button
+              onClick={handleStartEdit}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-black rounded-xl bg-[#FFD444] hover:bg-[#F4EB6C] text-[#172033] transition-all shadow-xs active:scale-[0.98] cursor-pointer self-start sm:self-auto min-h-[44px]"
+            >
+              <Edit3 className="w-4 h-4 stroke-[2.2]" />
+              <span>Edit Profile</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Success Notification */}
       {successMessage && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm rounded-xl p-3.5 flex items-center gap-2.5">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+        <div className="bg-[#EAFBEF] border border-[#55E07E]/40 text-[#0E7A36] text-xs sm:text-sm font-bold rounded-2xl p-4 flex items-center gap-2.5 shadow-2xs animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-[#0E7A36] shrink-0 stroke-[2.5]" />
           <span>{successMessage}</span>
         </div>
       )}
 
-      {/* Profile Card */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-        {/* Card Header Strip */}
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
-              <Building2 className="w-5 h-5" />
+      {/* Main Profile Container */}
+      <div className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-2xl shadow-xs overflow-hidden">
+        {/* Business Identity Header (Visual Focus) */}
+        <div className="px-5 sm:px-7 py-4.5 sm:py-5 border-b border-[#E5E7EB] flex items-center justify-between bg-[#FFFDF5]">
+          <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-[#FFD444] text-[#172033] flex items-center justify-center shrink-0 shadow-2xs">
+              {getCategoryIcon(business.type)}
             </div>
-            <div>
-              <h2 className="text-base font-semibold text-slate-900">{business.name}</h2>
-              <span className="text-xs text-slate-500">{business.type || 'General Business'}</span>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-black text-[#172033] leading-snug truncate">
+                {business.name}
+              </h2>
+              <span className="text-xs font-bold text-[#667085] block truncate mt-0.5">
+                {business.type || 'Local Business'}
+              </span>
             </div>
           </div>
 
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            Primary Tenant
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#EAFBEF] text-[#0E7A36] border border-[#55E07E]/30 shrink-0">
+            <span className="w-2 h-2 rounded-full bg-[#55E07E]" />
+            Active
           </span>
         </div>
 
-        {/* View / Edit Mode */}
+        {/* View / Edit State */}
         {isEditing ? (
-          <form onSubmit={handleSave} className="p-6 space-y-5">
+          <form onSubmit={handleSave} className="p-5 sm:p-7 space-y-5">
             {formError && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg p-3 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+              <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl p-3.5 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
                 <span>{formError}</span>
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Business Name <span className="text-red-500">*</span>
+                <label className="text-xs font-bold text-[#172033] uppercase tracking-wider block">
+                  Business Name <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Blue Tokai Coffee"
-                  className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-slate-800 placeholder:text-slate-400"
+                  placeholder="e.g. Apex Salon, Blue Tokai Coffee"
+                  className="w-full px-4 py-2.5 text-sm bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl focus:outline-none focus:border-[#FFD444] focus:ring-2 focus:ring-[#FFD444]/20 text-[#172033] placeholder:text-slate-400 font-medium"
                   required
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Business Category / Type
+                <label className="text-xs font-bold text-[#172033] uppercase tracking-wider block">
+                  Category / Type
                 </label>
                 <input
                   type="text"
                   value={type}
                   onChange={(e) => setType(e.target.value)}
-                  placeholder="e.g. Café, Salon, Gym, Bakery"
-                  className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-slate-800 placeholder:text-slate-400"
+                  placeholder="e.g. Salon, Cafe, Gym, Retail, Spa"
+                  className="w-full px-4 py-2.5 text-sm bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl focus:outline-none focus:border-[#FFD444] focus:ring-2 focus:ring-[#FFD444]/20 text-[#172033] placeholder:text-slate-400 font-medium"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+            <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5 pt-4 border-t border-[#E5E7EB]">
               <button
                 type="button"
                 onClick={handleCancelEdit}
                 disabled={updateMutation.isPending}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold text-[#667085] hover:text-[#172033] bg-[#FFFFFF] hover:bg-slate-50 border border-[#E5E7EB] rounded-xl transition-colors cursor-pointer min-h-[44px]"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
                 <span>Cancel</span>
               </button>
 
               <button
                 type="submit"
                 disabled={updateMutation.isPending}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-2xs disabled:opacity-50 cursor-pointer"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-5 py-2.5 text-xs font-black text-[#172033] bg-[#FFD444] hover:bg-[#F4EB6C] rounded-xl transition-all shadow-xs disabled:opacity-50 cursor-pointer active:scale-[0.98] min-h-[44px]"
               >
                 {updateMutation.isPending ? (
                   <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin text-[#172033]" />
                     <span>Saving...</span>
                   </>
                 ) : (
                   <>
-                    <Save className="w-3.5 h-3.5" />
+                    <Save className="w-4 h-4 stroke-[2.2]" />
                     <span>Save Changes</span>
                   </>
                 )}
@@ -236,71 +291,125 @@ export const BusinessProfile: React.FC = () => {
             </div>
           </form>
         ) : (
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div>
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Display Name
-                  </span>
-                  <p className="text-sm font-medium text-slate-900 mt-0.5">{business.name}</p>
-                </div>
-
-                <div>
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Category / Type
-                  </span>
-                  <p className="text-sm text-slate-700 mt-0.5">{business.type || 'Not specified'}</p>
-                </div>
-
-                <div>
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Branches Managed
-                  </span>
-                  <p className="text-sm font-semibold text-indigo-600 mt-0.5 flex items-center gap-1.5">
-                    <Layers className="w-4 h-4" />
-                    <span>{business.branchCount ?? 0} {business.branchCount === 1 ? 'branch' : 'branches'} configured</span>
-                  </p>
-                </div>
+          <div className="p-5 sm:p-7 space-y-6">
+            {/* Primary Business Info Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
+              {/* 1. Business Name */}
+              <div className="p-4 rounded-2xl bg-[#F8FAFC] border border-[#E5E7EB] space-y-1">
+                <span className="text-[10px] font-black text-[#667085] uppercase tracking-wider block">
+                  Business Name
+                </span>
+                <p className="text-sm sm:text-base font-black text-[#172033] break-words">
+                  {business.name}
+                </p>
               </div>
 
-              <div className="space-y-4 border-t md:border-t-0 md:border-l border-slate-100 md:pl-6 pt-4 md:pt-0">
-                <div>
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                    <Fingerprint className="w-3.5 h-3.5" />
-                    Tenant Business ID
-                  </span>
-                  <p className="text-xs font-mono text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 mt-1 select-all break-all">
-                    {business.id}
-                  </p>
+              {/* 2. Category */}
+              <div className="p-4 rounded-2xl bg-[#F8FAFC] border border-[#E5E7EB] space-y-1">
+                <span className="text-[10px] font-black text-[#667085] uppercase tracking-wider block">
+                  Category
+                </span>
+                <p className="text-sm sm:text-base font-black text-[#172033] break-words">
+                  {business.type || 'Local Business'}
+                </p>
+              </div>
+
+              {/* 3. Locations */}
+              <div className="p-4 rounded-2xl bg-[#F8FAFC] border border-[#E5E7EB] space-y-1">
+                <span className="text-[10px] font-black text-[#667085] uppercase tracking-wider block">
+                  Locations
+                </span>
+                <p className="text-sm sm:text-base font-black text-[#0E7A36]">
+                  {branchCount} active {branchCount === 1 ? 'location' : 'locations'}
+                </p>
+              </div>
+            </div>
+
+            {/* Secondary: Business Details Section */}
+            <div className="pt-2 border-t border-[#E5E7EB]">
+              <span className="text-xs font-black text-[#172033] uppercase tracking-wider block mb-3">
+                Business Details
+              </span>
+
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 text-xs">
+                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#F8FAFC] border border-[#E5E7EB]">
+                  <Calendar className="w-4 h-4 text-[#667085] shrink-0" />
+                  <div>
+                    <span className="text-[10px] font-bold text-[#667085] uppercase tracking-wider block">
+                      Created On
+                    </span>
+                    <span className="font-bold text-[#172033]">
+                      {new Date(business.createdAt).toLocaleDateString(undefined, {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#F8FAFC] border border-[#E5E7EB]">
+                  <Calendar className="w-4 h-4 text-[#667085] shrink-0" />
                   <div>
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5" />
-                      Created
-                    </span>
-                    <p className="text-xs text-slate-600 mt-1">
-                      {new Date(business.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-
-                  <div>
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5" />
+                    <span className="text-[10px] font-bold text-[#667085] uppercase tracking-wider block">
                       Last Updated
                     </span>
-                    <p className="text-xs text-slate-600 mt-1">
-                      {new Date(business.updatedAt).toLocaleDateString()}
-                    </p>
+                    <span className="font-bold text-[#172033]">
+                      {new Date(business.updatedAt).toLocaleDateString(undefined, {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
+
+            {/* Collapsed / De-emphasized Technical Details Section */}
+            <details className="group border-t border-[#E5E7EB] pt-3">
+              <summary className="text-xs font-bold text-[#667085] hover:text-[#172033] cursor-pointer flex items-center justify-between select-none py-1 min-h-[36px]">
+                <div className="flex items-center gap-1.5">
+                  <ChevronRight className="w-3.5 h-3.5 group-open:rotate-90 transition-transform" />
+                  <span>Technical details</span>
+                </div>
+                <span className="text-[10px] font-mono text-slate-400">UUID reference</span>
+              </summary>
+
+              <div className="mt-2.5 p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E5E7EB] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div>
+                  <span className="text-[10px] font-bold text-[#667085] uppercase tracking-wider block">
+                    Tenant ID
+                  </span>
+                  <span className="font-mono text-[#172033] text-[11px] select-all break-all">
+                    {business.id}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCopyId}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#172033] bg-[#FFFFFF] border border-[#E5E7EB] rounded-lg hover:bg-slate-50 transition-colors cursor-pointer self-start sm:self-auto shrink-0 min-h-[36px]"
+                >
+                  {copiedId ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-[#0E7A36]" />
+                      <span className="text-[#0E7A36]">Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-[#667085]" />
+                      <span>Copy ID</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </details>
           </div>
         )}
       </div>
     </div>
   );
 };
+
+

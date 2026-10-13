@@ -60,21 +60,23 @@ export const RewardQrModal: React.FC<RewardQrModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in"
     >
-      <div className="relative w-full max-w-sm rounded-3xl bg-[#FFFFFF] shadow-2xl border border-slate-100 overflow-hidden flex flex-col text-[#172033]">
-        {/* Header - Warm AAO styling */}
+      <div className="relative w-full max-w-sm rounded-3xl bg-[#FFFFFF] shadow-xl border border-[#E5E7EB] overflow-hidden flex flex-col text-[#172033]">
+        {/* Header - Warm AAO Light Styling */}
         <div
-          className={`p-5 pt-6 relative text-center text-white ${
-            isUnlocked ? 'bg-[#172033]' : 'bg-slate-900'
+          className={`p-5 pt-6 relative text-center border-b ${
+            isUnlocked
+              ? 'bg-[#FFFDF5] border-[#FFD444]/30'
+              : 'bg-[#EAFBEF] border-[#55E07E]/30'
           }`}
         >
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-colors cursor-pointer"
+            className="absolute top-4 right-4 p-1.5 rounded-full bg-white/80 hover:bg-white text-[#667085] hover:text-[#172033] transition-colors cursor-pointer shadow-2xs"
             aria-label="Close"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
 
           {/* Status pill & mascot banner */}
@@ -82,9 +84,9 @@ export const RewardQrModal: React.FC<RewardQrModalProps> = ({
             {isUnlocked ? (
               <>
                 <div className="mb-2">
-                  <AaoMascot mood="reward" size={72} className="mx-auto" />
+                  <AaoMascot mood="reward" size={60} className="mx-auto" />
                 </div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EAFBEF] border border-[#55E07E]/40 text-[#0E7A36] text-[11px] font-extrabold mb-1.5 shadow-xs">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-[#55E07E]/40 text-[#0E7A36] text-[10px] font-black uppercase tracking-wider mb-1.5 shadow-2xs">
                   <Gift className="w-3.5 h-3.5 text-[#16A34A]" />
                   <span>YOUR REWARD IS READY!</span>
                 </div>
@@ -92,26 +94,26 @@ export const RewardQrModal: React.FC<RewardQrModalProps> = ({
             ) : (
               <>
                 <div className="mb-2">
-                  <AaoMascot mood="celebrate" size={68} className="mx-auto" />
+                  <AaoMascot mood="celebrate" size={60} className="mx-auto" />
                 </div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-slate-300 text-[11px] font-semibold mb-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-[#55E07E]" />
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-[#55E07E]/50 text-[#0E7A36] text-[10px] font-black uppercase tracking-wider mb-1.5 shadow-2xs">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#16A34A]" />
                   <span>REWARD REDEEMED</span>
                 </div>
               </>
             )}
 
-            <h3 className="text-xl font-black tracking-tight text-white leading-tight">
+            <h3 className="text-lg sm:text-xl font-black tracking-tight text-[#172033] leading-snug">
               {displayName}
             </h3>
             {businessName && (
-              <p className="text-xs text-slate-300 mt-1 flex items-center justify-center gap-1.5 font-medium">
-                <Store className="w-3.5 h-3.5 text-slate-400" />
+              <p className="text-xs text-[#667085] mt-1 flex items-center justify-center gap-1.5 font-bold">
+                <Store className="w-3.5 h-3.5 text-[#667085]" />
                 <span>{businessName}</span>
               </p>
             )}
             {reward.rewardValue && (
-              <p className="text-xs font-bold text-[#FFD444] mt-1">
+              <p className="text-xs font-extrabold text-[#0E7A36] mt-0.5">
                 Value: {reward.rewardValue}
               </p>
             )}
@@ -119,38 +121,38 @@ export const RewardQrModal: React.FC<RewardQrModalProps> = ({
         </div>
 
         {/* Content body */}
-        <div className="p-6 flex flex-col items-center text-center">
+        <div className="p-5 flex flex-col items-center text-center">
           {isUnlocked ? (
             <>
               {/* UNLOCKED: Show Reward QR Container */}
-              <div className="p-4 bg-[#FFFFFF] rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center justify-center mb-3">
+              <div className="p-4 bg-[#FFFFFF] rounded-2xl border border-[#E5E7EB] shadow-2xs flex flex-col items-center justify-center mb-3">
                 {rawToken ? (
                   <QRCodeSVG
                     value={rawToken}
-                    size={190}
+                    size={180}
                     level="M"
                     includeMargin
-                    className="w-full h-auto max-w-[190px]"
+                    className="w-full h-auto max-w-[180px]"
                   />
                 ) : (
-                  <div className="w-44 h-44 flex flex-col items-center justify-center text-[#667085]">
-                    <QrCode className="w-12 h-12 mb-2 text-slate-400" />
+                  <div className="w-40 h-40 flex flex-col items-center justify-center text-[#667085]">
+                    <QrCode className="w-10 h-10 mb-2 text-slate-400" />
                     <span className="text-xs">QR Code Ready</span>
                   </div>
                 )}
               </div>
 
-              {/* Informational Guidance (No Customer Redeem Action) */}
-              <div className="flex items-center gap-2.5 text-xs font-medium text-[#172033] mb-4 bg-[#F8FAFC] px-3.5 py-2.5 rounded-xl border border-slate-200">
+              {/* Informational Guidance */}
+              <div className="flex items-center gap-2 text-xs font-medium text-[#172033] mb-3 bg-[#F8FAFC] px-3.5 py-2.5 rounded-xl border border-[#E5E7EB] w-full text-left">
                 <ShieldCheck className="w-4 h-4 text-[#16A34A] shrink-0" />
-                <span className="text-left text-xs leading-relaxed text-[#172033]">
-                  Present this QR to store staff at checkout. Staff will scan to validate & apply your reward.
+                <span className="text-xs leading-relaxed text-[#172033]">
+                  Present this QR to store staff at checkout to redeem your reward.
                 </span>
               </div>
 
               {/* Fallback Token Code Display */}
               {rawToken && (
-                <div className="w-full bg-[#F8FAFC] border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-2">
+                <div className="w-full bg-[#F8FAFC] border border-[#E5E7EB] rounded-xl p-3 flex items-center justify-between gap-2">
                   <div className="text-left overflow-hidden">
                     <span className="text-[10px] uppercase font-bold text-[#667085] block tracking-wider">
                       Redemption Code
@@ -162,7 +164,7 @@ export const RewardQrModal: React.FC<RewardQrModalProps> = ({
                   <button
                     type="button"
                     onClick={handleCopy}
-                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FFFFFF] border border-slate-200 text-xs font-semibold text-[#172033] hover:bg-slate-50 transition-colors shadow-xs cursor-pointer active:scale-95"
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FFFFFF] border border-[#E5E7EB] text-xs font-bold text-[#172033] hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer active:scale-95"
                   >
                     {copied ? (
                       <>
@@ -181,55 +183,56 @@ export const RewardQrModal: React.FC<RewardQrModalProps> = ({
             </>
           ) : (
             <>
-              {/* REDEEMED: Presentation View */}
-              <div className="w-full space-y-4 py-2">
-                <div className="w-16 h-16 rounded-full bg-[#EAFBEF] border border-[#55E07E]/40 flex items-center justify-center mx-auto text-[#16A34A]">
-                  <CheckCircle2 className="w-9 h-9 stroke-[2.2]" />
-                </div>
-
-                <div>
-                  <h4 className="text-base font-bold text-[#172033]">
+              {/* REDEEMED: Celebratory Presentation View */}
+              <div className="w-full space-y-3">
+                {/* Main Success Title */}
+                <div className="py-1">
+                  <h4 className="text-sm font-black text-[#0E7A36] mb-0.5">
                     See you again!
                   </h4>
-                  <p className="text-xs text-[#667085] mt-1">
-                    This reward was verified and redeemed at the counter.
+                  <p className="text-xs text-[#667085]">
+                    Thank you for being a valued loyal customer.
                   </p>
                 </div>
 
-                <div className="w-full bg-[#F8FAFC] border border-slate-200 rounded-xl p-3.5 space-y-2 text-left">
+                {/* Compact Info Card */}
+                <div className="w-full bg-[#F8FAFC] border border-[#E5E7EB] rounded-2xl p-3.5 space-y-2 text-left shadow-2xs">
                   {reward.redeemedAt && (
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-[#667085] flex items-center gap-1.5">
+                      <span className="text-[#667085] flex items-center gap-1.5 font-medium">
                         <Clock className="w-3.5 h-3.5 text-[#667085]" />
                         <span>Redeemed On</span>
                       </span>
-                      <span className="font-semibold text-[#172033]">
+                      <span className="font-bold text-[#172033]">
                         {formatDate(reward.redeemedAt)}
                       </span>
                     </div>
                   )}
 
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-[#667085] flex items-center gap-1.5">
+                    <span className="text-[#667085] flex items-center gap-1.5 font-medium">
                       <Calendar className="w-3.5 h-3.5 text-[#667085]" />
                       <span>Unlocked On</span>
                     </span>
-                    <span className="font-semibold text-[#172033]">
+                    <span className="font-bold text-[#172033]">
                       {formatDate(reward.unlockedAt)}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-[#667085]">Loyalty Cycle</span>
-                    <span className="font-semibold text-[#172033]">
+                    <span className="text-[#667085] font-medium">Loyalty Cycle</span>
+                    <span className="font-bold text-[#172033]">
                       Cycle {reward.cycleNumber}
                     </span>
                   </div>
                 </div>
 
-                <p className="text-[11px] text-[#667085] bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                  Used reward vouchers cannot be redeemed again. Keep collecting stamps on your next visit to unlock new rewards!
-                </p>
+                {/* Simplified note */}
+                <div className="bg-[#FFFDF5] border border-[#FFD444]/30 rounded-xl p-2.5 text-left">
+                  <p className="text-[11px] text-[#667085] leading-relaxed">
+                    This reward has already been redeemed. Keep collecting stamps for your next reward!
+                  </p>
+                </div>
               </div>
             </>
           )}
@@ -238,7 +241,7 @@ export const RewardQrModal: React.FC<RewardQrModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="w-full mt-5 py-3.5 rounded-xl bg-[#FFD444] hover:bg-[#F4EB6C] text-[#172033] font-black text-sm tracking-wide transition-all shadow-xs hover:shadow cursor-pointer active:scale-[0.98]"
+            className="w-full mt-4 py-3 rounded-xl bg-[#FFD444] hover:bg-[#F4EB6C] text-[#172033] font-black text-sm tracking-wide transition-all shadow-xs hover:shadow cursor-pointer active:scale-[0.98]"
           >
             Done
           </button>

@@ -170,6 +170,67 @@ The distinction between `VisitType.QUALIFYING` and `VisitType.REWARD_REDEMPTION`
 - **Branch Breakdown:** All visits record `branchId`, allowing multi-branch businesses to compare footfall and redemption volume across locations.
 - **Time-Series Analysis:** Visits are timestamped with `createdAt`, enabling daily, weekly, and monthly trends for customer retention.
 
+## 14. Loyalty Program Change-Impact Architecture (Phase 1)
+
+### Core Business Rule
+A customer's active loyalty cycle must strictly keep the loyalty rules that were active when that cycle started. Changing the current loyalty program affects **future cycles**, and does NOT automatically disrupt or invalidate an active customer's current cycle.
+
+- **Immutability of Active Cycle Rules:** When a customer starts an active cycle (on their first qualifying visit), the cycle snapshots the active program's rules:
+  - `snapshotCycleLength`: Snapshots `LoyaltyProgram.cycleLength` at cycle start.
+  - `snapshotMilestones`: JSON array snapshot of active program milestones (`id`, `visitNumber`, `rewardType`, `rewardName`, `rewardDescription`, `rewardValue`, `isEnabled`).
+- **Protection Against Impossible States:** If an owner reduces a 6-visit program to 3 visits while Customer A is at 4/6 visits, Customer A's cycle continues: `4/6 → 5/6 → 6/6 → original reward`. Customer A never experiences impossible states such as `4/3` or `5/3`. After completing 6/6, Customer A's next cycle begins with the new configuration (`0/3 → 1/3 → 2/3 → 3/3`).
+
+### Reward Change Modes (`RewardChangeMode`)
+When an owner edits, toggles, or stops a reward milestone, the system supports three explicit change-impact modes:
+
+1. **`NEW_CYCLES_ONLY` (Default):**
+   - The milestone configuration is updated in the database for the loyalty program.
+   - Active cycles are **NOT** modified. Active cycles retain their snapshotted milestones and rules.
+   - Future cycles snapshot the new configuration when created.
+
+2. **`EXISTING_AND_NEW`:**
+   - The updated reward applies to future cycles AND to active customers currently working towards that reward.
+   - **Crucial Clarification Rule:** Active cycle snapshots are NOT blindly rewritten:
+     - **Unreached Milestones:** If the customer has not reached the affected reward milestone yet (`visitCount < milestone.visitNumber` and no `MilestoneReward` exists for that milestone in the cycle), the milestone configuration in `snapshotMilestones` is updated. The customer will receive the new reward when they reach that visit number.
+     - **Already Earned Milestones:** If the customer has already reached/earned that reward (`visitCount >= milestone.visitNumber` or a `MilestoneReward` already exists in this cycle), their existing `MilestoneReward` remains **100% unchanged**.
+     - **Historical / Redeemed Rewards:** Completed cycles and redeemed rewards are **never** modified.
+
+3. **`STOP_REWARD`:**
+   - The owner stops or disables a reward milestone.
+   - For customers who have **NOT** yet reached that milestone, it is disabled (`isEnabled: false`) in their cycle snapshot so they will no longer earn it.
+   - For customers who have **already earned** the reward, their existing `MilestoneReward` remains valid, safe, and redeemable before expiration.
+
+### Schema & Database Migration
+- Added `snapshotCycleLength: Int?` and `snapshotMilestones: Json?` to `LoyaltyCycle`.
+- Backfilled all pre-existing cycles from their linked `LoyaltyProgram` and `Milestone` records via SQL migration `20261005152441_add_cycle_snapshots_and_reward_change_mode`.
+- Exported domain enum `RewardChangeMode` (`NEW_CYCLES_ONLY`, `EXISTING_AND_NEW`, `STOP_REWARD`).
+
+## 15. Loyalty Program Change-Impact Architecture (Phase 2: Owner UI Integration)
+
+### Owner Portal Change Selection Flow
+When editing an existing milestone reward, the Owner Portal provides a clear, jargon-free choice:
+- **"Who should this change apply to?"**
+  1. **New cycles only** (`NEW_CYCLES_ONLY` — Default & Recommended):
+     - Subtitle: *"New customers get the updated reward. Existing customers keep the current reward."*
+     - Confirmation: Simple, safest default.
+  2. **Existing + new cycles** (`EXISTING_AND_NEW`):
+     - Subtitle / Notice: *"The updated reward will apply to all customers."*
+     - Reassuring confirmation box, no aggressive warning language.
+  3. **Stop this reward** (`STOP_REWARD`):
+     - Subtitle / Notice: *"Customers can no longer earn this reward. Existing earned rewards remain safe."*
+     - Uses clear destructive button styling (`Stop This Reward`). Disables the milestone in the program and deactivates it in active unreached cycles.
+
+### Creation vs. Edit Rules
+- **Creating a NEW reward:** Normal creation flow (`POST /api/loyalty-programs/:programId/milestones`). No change-impact selection is required or presented.
+- **Editing an EXISTING reward:** Change-impact selection is presented. The selected `changeMode` (`NEW_CYCLES_ONLY`, `EXISTING_AND_NEW`, or `STOP_REWARD`) is passed directly in `PATCH /api/milestones/:milestoneId`.
+
+### Proactive Safe Delete / Disable UX
+- When an owner clicks delete on a reward, the system inspects `_count.milestoneRewards`.
+- If the reward has associated customer reward records (`_count.milestoneRewards > 0` or a 409 conflict):
+  - The UI does **not** display a failing "Delete Reward" action.
+  - Instead, it proactively presents **"Keep Reward"** and **"Disable Reward"** with the explanation: *"Customers will no longer earn this reward, but existing rewards will remain safe."*
+- If the reward has no customer history, standard deletion (`DELETE /api/milestones/:milestoneId`) is preserved.
+
 
 
 

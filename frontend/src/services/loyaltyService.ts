@@ -7,6 +7,7 @@ import type {
   UpdateLoyaltyProgramRequest,
   CreateMilestoneRequest,
   UpdateMilestoneRequest,
+  RewardChangeMode,
 } from '../types/loyalty';
 
 export const loyaltyService = {
@@ -105,11 +106,12 @@ export const loyaltyService = {
 
   async updateMilestoneStatus(
     milestoneId: string,
-    isEnabled: boolean
+    isEnabled: boolean,
+    changeMode?: RewardChangeMode
   ): Promise<Milestone> {
     const response = await api.patch<ApiResponse<{ milestone: Milestone }>>(
       `/milestones/${milestoneId}/status`,
-      { isEnabled }
+      { isEnabled, ...(changeMode ? { changeMode } : {}) }
     );
     if (!response.data.data?.milestone) {
       throw new Error(response.data.message || 'Failed to update milestone status');

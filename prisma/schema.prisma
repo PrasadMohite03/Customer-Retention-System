@@ -185,16 +185,18 @@ model Milestone {
 }
 
 model LoyaltyCycle {
-  id                String             @id @default(uuid())
-  customerProfileId String
-  programId         String
-  cycleNumber       Int
-  visitCount        Int
-  status            LoyaltyCycleStatus
-  startedAt         DateTime
-  completedAt       DateTime?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  id                   String             @id @default(uuid())
+  customerProfileId    String
+  programId            String
+  cycleNumber          Int
+  visitCount           Int
+  status               LoyaltyCycleStatus
+  snapshotCycleLength  Int?
+  snapshotMilestones   Json?
+  startedAt            DateTime
+  completedAt          DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
   customerProfile  CustomerProfile   @relation("CustomerProfileLoyaltyCycles", fields: [customerProfileId], references: [id], onDelete: Restrict)
   program          LoyaltyProgram    @relation("ProgramLoyaltyCycles", fields: [programId], references: [id], onDelete: Restrict)
@@ -208,6 +210,14 @@ model LoyaltyCycle {
   @@index([customerProfileId])
   @@index([programId])
   @@index([customerProfileId, programId, status])
+}
+
+/// Internal enum for reward change impact modes (Phase 1 backend support).
+/// Used when an owner modifies a reward/milestone to declare how the change affects active cycles.
+enum RewardChangeMode {
+  NEW_CYCLES_ONLY
+  EXISTING_AND_NEW
+  STOP_REWARD
 }
 
 model VisitRequest {

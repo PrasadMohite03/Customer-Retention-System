@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Prisma, RewardType } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { AppError } from '../utils/errors';
+import { syncMilestoneChangeToActiveCycles, RewardChangeMode } from '../utils/cycleSnapshot';
 
 // ─── Zod Schemas ────────────────────────────────────────────────────────────
 
@@ -80,6 +81,7 @@ export const updateMilestoneSchema = z
     rewardName: z.string().trim().nullable().optional(),
     rewardDescription: z.string().trim().nullable().optional(),
     rewardValue: z.number().nullable().optional(),
+    changeMode: z.nativeEnum(RewardChangeMode).optional(),
   })
   .refine(
     (data) =>
@@ -87,7 +89,8 @@ export const updateMilestoneSchema = z
       data.rewardType !== undefined ||
       data.rewardName !== undefined ||
       data.rewardDescription !== undefined ||
-      data.rewardValue !== undefined,
+      data.rewardValue !== undefined ||
+      data.changeMode !== undefined,
     { message: 'At least one field must be provided for update' }
   )
   .refine(
@@ -114,6 +117,7 @@ export const updateMilestoneSchema = z
 
 export const updateMilestoneStatusSchema = z.object({
   isEnabled: z.boolean({ message: 'isEnabled must be a boolean' }),
+  changeMode: z.nativeEnum(RewardChangeMode).optional(),
 });
 
 export type CreateLoyaltyProgramInput = z.infer<typeof createLoyaltyProgramSchema>;
@@ -217,7 +221,10 @@ export class LoyaltyService {
           isActive: true,
         },
         include: {
-          milestones: { orderBy: { visitNumber: 'asc' } },
+          milestones: {
+            orderBy: { visitNumber: 'asc' },
+            include: { _count: { select: { milestoneRewards: true } } },
+          },
         },
       });
 
@@ -245,7 +252,10 @@ export class LoyaltyService {
     const program = await prisma.loyaltyProgram.findFirst({
       where: { branchId, businessId, isActive: true },
       include: {
-        milestones: { orderBy: { visitNumber: 'asc' } },
+        milestones: {
+          orderBy: { visitNumber: 'asc' },
+          include: { _count: { select: { milestoneRewards: true } } },
+        },
       },
     });
 
@@ -279,15 +289,15 @@ export class LoyaltyService {
       throw new AppError('No active loyalty program found for this branch', 404);
     }
 
-    // Validate cycleLength reduction does not conflict with existing milestones
+    // Validate cycleLength reduction does not conflict with existing active milestones
     if (validatedData.cycleLength !== undefined) {
       const newCycleLength = validatedData.cycleLength;
       const conflictingMilestone = program.milestones.find(
-        (m) => m.visitNumber > newCycleLength
+        (m) => m.isEnabled && m.visitNumber > newCycleLength
       );
       if (conflictingMilestone) {
         throw new AppError(
-          `Cannot reduce cycleLength to ${newCycleLength}: milestone at visit #${conflictingMilestone.visitNumber} would exceed the new cycle length. Remove or update that milestone first.`,
+          `Cannot reduce visits to complete to ${newCycleLength}: active reward at visit ${conflictingMilestone.visitNumber} (${conflictingMilestone.rewardName || 'Reward'}) exceeds the new visit count. Disable or remove that reward first.`,
           409
         );
       }
@@ -305,7 +315,10 @@ export class LoyaltyService {
           : {}),
       },
       include: {
-        milestones: { orderBy: { visitNumber: 'asc' } },
+        milestones: {
+          orderBy: { visitNumber: 'asc' },
+          include: { _count: { select: { milestoneRewards: true } } },
+        },
       },
     });
 
@@ -323,7 +336,10 @@ export class LoyaltyService {
       where: { branchId, businessId },
       orderBy: { createdAt: 'desc' },
       include: {
-        milestones: { orderBy: { visitNumber: 'asc' } },
+        milestones: {
+          orderBy: { visitNumber: 'asc' },
+          include: { _count: { select: { milestoneRewards: true } } },
+        },
       },
     });
   }
@@ -364,6 +380,9 @@ export class LoyaltyService {
               ? new Prisma.Decimal(validatedData.rewardValue)
               : null,
           isEnabled: true,
+        },
+        include: {
+          _count: { select: { milestoneRewards: true } },
         },
       });
 
@@ -408,6 +427,9 @@ export class LoyaltyService {
       const updated = await prisma.milestone.update({
         where: { id: milestoneId },
         data: {
+          ...(validatedData.changeMode === RewardChangeMode.STOP_REWARD
+            ? { isEnabled: false }
+            : {}),
           ...(validatedData.visitNumber !== undefined
             ? { visitNumber: validatedData.visitNumber }
             : {}),
@@ -429,7 +451,29 @@ export class LoyaltyService {
               }
             : {}),
         },
+        include: {
+          _count: { select: { milestoneRewards: true } },
+        },
       });
+
+      // Synchronize changes to active cycles if changeMode is specified
+      if (validatedData.changeMode) {
+        await syncMilestoneChangeToActiveCycles({
+          programId: milestone.programId,
+          milestoneId: updated.id,
+          targetVisitNumber: updated.visitNumber,
+          mode: validatedData.changeMode,
+          updatedMilestone: {
+            id: updated.id,
+            visitNumber: updated.visitNumber,
+            rewardType: updated.rewardType,
+            rewardName: updated.rewardName,
+            rewardDescription: updated.rewardDescription,
+            rewardValue: updated.rewardValue ? updated.rewardValue.toString() : null,
+            isEnabled: updated.isEnabled,
+          },
+        });
+      }
 
       return updated;
     } catch (error) {
@@ -456,14 +500,126 @@ export class LoyaltyService {
     input: unknown
   ) {
     const validatedData = updateMilestoneStatusSchema.parse(input);
-    await verifyMilestoneOwnership(milestoneId, businessId);
+    const milestone = await verifyMilestoneOwnership(milestoneId, businessId);
+
+    // Cannot enable a milestone if its visit number exceeds the program's cycle length
+    if (validatedData.isEnabled && milestone.visitNumber > milestone.program.cycleLength) {
+      throw new AppError(
+        `Cannot enable reward for visit #${milestone.visitNumber}: the loyalty program only has ${milestone.program.cycleLength} visits to complete. Increase visits to complete first or edit this reward.`,
+        400
+      );
+    }
 
     const updated = await prisma.milestone.update({
       where: { id: milestoneId },
       data: { isEnabled: validatedData.isEnabled },
+      include: {
+        _count: { select: { milestoneRewards: true } },
+      },
+    });
+
+    const mode =
+      validatedData.changeMode ??
+      (validatedData.isEnabled ? RewardChangeMode.NEW_CYCLES_ONLY : RewardChangeMode.STOP_REWARD);
+
+    await syncMilestoneChangeToActiveCycles({
+      programId: milestone.programId,
+      milestoneId: updated.id,
+      targetVisitNumber: updated.visitNumber,
+      mode,
+      updatedMilestone: {
+        id: updated.id,
+        visitNumber: updated.visitNumber,
+        rewardType: updated.rewardType,
+        rewardName: updated.rewardName,
+        rewardDescription: updated.rewardDescription,
+        rewardValue: updated.rewardValue ? updated.rewardValue.toString() : null,
+        isEnabled: updated.isEnabled,
+      },
     });
 
     return updated;
+  }
+
+  /**
+   * Dedicated domain method for reward change impact (Phase 1 backend architecture).
+   * Supports NEW_CYCLES_ONLY, EXISTING_AND_NEW, and STOP_REWARD.
+   */
+  static async applyMilestoneRewardChange(
+    milestoneId: string,
+    businessId: string,
+    mode: RewardChangeMode,
+    updates?: {
+      rewardType?: RewardType;
+      rewardName?: string | null;
+      rewardDescription?: string | null;
+      rewardValue?: number | null;
+      visitNumber?: number;
+      isEnabled?: boolean;
+    }
+  ) {
+    const milestone = await verifyMilestoneOwnership(milestoneId, businessId);
+
+    let updatedMilestone = milestone;
+
+    if (mode === RewardChangeMode.STOP_REWARD) {
+      updatedMilestone = await prisma.milestone.update({
+        where: { id: milestoneId },
+        data: { isEnabled: false },
+        include: {
+          program: true,
+          _count: { select: { milestoneRewards: true } },
+        },
+      });
+    } else if (updates) {
+      if (updates.visitNumber !== undefined && updates.visitNumber > milestone.program.cycleLength) {
+        throw new AppError(
+          `visitNumber (${updates.visitNumber}) exceeds the program's cycleLength (${milestone.program.cycleLength})`,
+          409
+        );
+      }
+
+      updatedMilestone = await prisma.milestone.update({
+        where: { id: milestoneId },
+        data: {
+          ...(updates.visitNumber !== undefined ? { visitNumber: updates.visitNumber } : {}),
+          ...(updates.rewardType !== undefined ? { rewardType: updates.rewardType } : {}),
+          ...(updates.rewardName !== undefined ? { rewardName: updates.rewardName } : {}),
+          ...(updates.rewardDescription !== undefined ? { rewardDescription: updates.rewardDescription } : {}),
+          ...(updates.rewardValue !== undefined
+            ? {
+                rewardValue:
+                  updates.rewardValue != null
+                    ? new Prisma.Decimal(updates.rewardValue)
+                    : null,
+              }
+            : {}),
+          ...(updates.isEnabled !== undefined ? { isEnabled: updates.isEnabled } : {}),
+        },
+        include: {
+          program: true,
+          _count: { select: { milestoneRewards: true } },
+        },
+      });
+    }
+
+    await syncMilestoneChangeToActiveCycles({
+      programId: updatedMilestone.programId,
+      milestoneId: updatedMilestone.id,
+      targetVisitNumber: updatedMilestone.visitNumber,
+      mode,
+      updatedMilestone: {
+        id: updatedMilestone.id,
+        visitNumber: updatedMilestone.visitNumber,
+        rewardType: updatedMilestone.rewardType,
+        rewardName: updatedMilestone.rewardName,
+        rewardDescription: updatedMilestone.rewardDescription,
+        rewardValue: updatedMilestone.rewardValue ? updatedMilestone.rewardValue.toString() : null,
+        isEnabled: updatedMilestone.isEnabled,
+      },
+    });
+
+    return updatedMilestone;
   }
 
   /**

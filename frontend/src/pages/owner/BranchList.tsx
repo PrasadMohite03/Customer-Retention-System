@@ -3,22 +3,19 @@ import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { branchService } from '../../services/branchService';
 import {
-  GitBranch,
   Plus,
   Search,
   MapPin,
   QrCode,
   CheckCircle2,
-  Copy,
-  Check,
   ChevronRight,
   AlertCircle,
   Loader2,
   RefreshCw,
   X,
   Store,
+  Power,
 } from 'lucide-react';
-
 
 export const BranchList: React.FC = () => {
   const queryClient = useQueryClient();
@@ -28,7 +25,6 @@ export const BranchList: React.FC = () => {
   const [newBranchName, setNewBranchName] = useState('');
   const [newBranchAddress, setNewBranchAddress] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
-  const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   const {
@@ -52,11 +48,11 @@ export const BranchList: React.FC = () => {
       setNewBranchName('');
       setNewBranchAddress('');
       setCreateError(null);
-      setActionSuccess(`Branch "${newBranch.name}" created successfully.`);
+      setActionSuccess(`Location "${newBranch.name}" created successfully.`);
       setTimeout(() => setActionSuccess(null), 4000);
     },
     onError: (err: any) => {
-      const msg = err.response?.data?.message || err.message || 'Failed to create branch';
+      const msg = err.response?.data?.message || err.message || 'Failed to create location';
       setCreateError(msg);
     },
   });
@@ -67,29 +63,22 @@ export const BranchList: React.FC = () => {
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['branches'] });
       setActionSuccess(
-        `Branch "${updated.name}" is now ${updated.isActive ? 'active' : 'inactive'}.`
+        `Location "${updated.name}" is now ${updated.isActive ? 'active' : 'inactive'}.`
       );
       setTimeout(() => setActionSuccess(null), 4000);
     },
     onError: (err: any) => {
-      const msg = err.response?.data?.message || err.message || 'Failed to update branch status';
+      const msg = err.response?.data?.message || err.message || 'Failed to update location status';
       setActionSuccess(msg);
     },
   });
-
-  const handleCopyQrToken = (token: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(token);
-    setCopiedToken(token);
-    setTimeout(() => setCopiedToken(null), 2500);
-  };
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError(null);
 
     if (!newBranchName.trim()) {
-      setCreateError('Branch name is required');
+      setCreateError('Location name is required');
       return;
     }
 
@@ -116,21 +105,21 @@ export const BranchList: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-3">
-        <Loader2 className="w-7 h-7 text-indigo-600 animate-spin" />
-        <p className="text-xs text-slate-500 font-medium">Loading branches...</p>
+        <Loader2 className="w-8 h-8 text-[#D97706] animate-spin" />
+        <p className="text-xs text-[#667085] font-bold">Loading locations...</p>
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center max-w-lg mx-auto">
-        <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
-        <h3 className="text-sm font-semibold text-red-900">Failed to load branches</h3>
-        <p className="text-xs text-red-600 mt-1">{(error as Error)?.message || 'An error occurred'}</p>
+      <div className="bg-[#FFFFFF] border border-rose-200 rounded-2xl p-6 text-center max-w-lg mx-auto shadow-xs">
+        <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-2" />
+        <h3 className="text-sm font-black text-[#172033]">Failed to load locations</h3>
+        <p className="text-xs text-rose-600 mt-1">{(error as Error)?.message || 'An error occurred'}</p>
         <button
           onClick={() => refetch()}
-          className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors cursor-pointer"
+          className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-rose-600 hover:bg-rose-700 text-white transition-colors cursor-pointer"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           <span>Retry</span>
@@ -141,99 +130,152 @@ export const BranchList: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Branch Management</h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Configure locations, manage branch status, and view QR tokens.
-          </p>
-        </div>
+      {/* Header Banner */}
+      <div className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-2xl p-5 sm:p-6 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="space-y-1">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FFF8E1] border border-[#FFE08A] text-[#92400E] text-[10px] font-black uppercase tracking-wider">
+              <Store className="w-3 h-3 text-[#D97706]" />
+              <span>Locations</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-[#172033] tracking-tight">
+              Locations & Check-in
+            </h1>
+            <p className="text-xs sm:text-sm text-[#667085]">
+              Manage physical locations, standees, and customer check-in QR codes.
+            </p>
+          </div>
 
-        <button
-          onClick={() => {
-            setCreateError(null);
-            setIsCreateModalOpen(true);
-          }}
-          className="inline-flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-2xs cursor-pointer self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Branch</span>
-        </button>
+          <button
+            onClick={() => {
+              setCreateError(null);
+              setIsCreateModalOpen(true);
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-black rounded-xl bg-[#FFD444] hover:bg-[#F4EB6C] text-[#172033] transition-all shadow-xs active:scale-[0.98] cursor-pointer self-start sm:self-auto min-h-[44px]"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <span>Add Location</span>
+          </button>
+        </div>
       </div>
 
       {/* Action Notification */}
       {actionSuccess && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm rounded-xl p-3.5 flex items-center gap-2.5">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+        <div className="bg-[#EAFBEF] border border-[#55E07E]/40 text-[#0E7A36] text-xs sm:text-sm font-bold rounded-2xl p-4 flex items-center gap-2.5 shadow-2xs animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-[#0E7A36] shrink-0 stroke-[2.5]" />
           <span>{actionSuccess}</span>
         </div>
       )}
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs">
-          <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Total Branches</span>
-          <p className="text-xl font-bold text-slate-900 mt-1">{branches.length}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+        {/* Total Locations: Full-width prominent card on mobile, 1 col on desktop */}
+        <div
+          onClick={() => setFilterStatus('ALL')}
+          className={`col-span-2 sm:col-span-1 bg-[#FFFFFF] border p-4 sm:p-5 rounded-2xl shadow-xs cursor-pointer transition-all active:scale-[0.99] ${
+            filterStatus === 'ALL'
+              ? 'border-[#FFE08A] ring-2 ring-[#FFD444]/20'
+              : 'border-[#E5E7EB] hover:border-slate-300'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-[#667085] uppercase tracking-wider">Total Locations</span>
+            <div className="w-8 h-8 rounded-xl bg-[#F8FAFC] border border-[#E5E7EB] text-[#667085] flex items-center justify-center shrink-0">
+              <Store className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-2xl font-black text-[#172033] mt-2">{branches.length}</p>
+          <span className="text-[11px] text-[#667085] mt-0.5 block">Physical outlets registered</span>
         </div>
 
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs">
-          <span className="text-[11px] text-emerald-600 uppercase tracking-wider font-semibold flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            Active Branches
+        {/* Active: Compact half-width card on mobile, 1 col on desktop */}
+        <div
+          onClick={() => setFilterStatus(filterStatus === 'ACTIVE' ? 'ALL' : 'ACTIVE')}
+          className={`col-span-1 bg-[#FFFFFF] border p-3.5 sm:p-5 rounded-2xl shadow-xs cursor-pointer transition-all active:scale-[0.99] ${
+            filterStatus === 'ACTIVE'
+              ? 'border-[#55E07E] ring-2 ring-[#55E07E]/20 bg-[#F6FDF8]'
+              : 'border-[#E5E7EB] hover:border-[#55E07E]/40'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[11px] sm:text-xs font-bold text-[#0E7A36] uppercase tracking-wider flex items-center gap-1.5 truncate">
+              <span className="w-2 h-2 rounded-full bg-[#55E07E] shrink-0" />
+              Active
+            </span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-[#EAFBEF] border border-[#55E07E]/30 text-[#0E7A36] flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </div>
+          </div>
+          <p className="text-xl sm:text-2xl font-black text-[#0E7A36] mt-1.5 sm:mt-2">{activeCount}</p>
+          <span className="text-[10px] sm:text-[11px] text-[#667085] mt-0.5 block truncate">
+            <span className="sm:hidden">Live QR check-in</span>
+            <span className="hidden sm:inline">Live QR check-in available</span>
           </span>
-          <p className="text-xl font-bold text-emerald-700 mt-1">{activeCount}</p>
         </div>
 
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs">
-          <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-            Inactive Branches
-          </span>
-          <p className="text-xl font-bold text-slate-600 mt-1">{inactiveCount}</p>
+        {/* Inactive: Compact half-width card on mobile, 1 col on desktop */}
+        <div
+          onClick={() => setFilterStatus(filterStatus === 'INACTIVE' ? 'ALL' : 'INACTIVE')}
+          className={`col-span-1 bg-[#FFFFFF] border p-3.5 sm:p-5 rounded-2xl shadow-xs cursor-pointer transition-all active:scale-[0.99] ${
+            filterStatus === 'INACTIVE'
+              ? 'border-slate-400 ring-2 ring-slate-300/40 bg-slate-50'
+              : 'border-[#E5E7EB] hover:border-slate-300'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[11px] sm:text-xs font-bold text-[#667085] uppercase tracking-wider flex items-center gap-1.5 truncate">
+              <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
+              Inactive
+            </span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-[#F8FAFC] border border-[#E5E7EB] text-[#667085] flex items-center justify-center shrink-0">
+              <Power className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </div>
+          </div>
+          <p className="text-xl sm:text-2xl font-black text-[#667085] mt-1.5 sm:mt-2">{inactiveCount}</p>
+          <span className="text-[10px] sm:text-[11px] text-[#667085] mt-0.5 block truncate">Check-ins paused</span>
         </div>
       </div>
 
       {/* Search & Filters */}
-      <div className="bg-white border border-slate-200 rounded-xl p-3.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-2xs">
+      <div className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-2xl p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-xs">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-[#667085] absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by branch name, address, or QR token..."
-            className="w-full pl-9 pr-4 py-1.5 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-slate-800 placeholder:text-slate-400"
+            placeholder="Search by location name or address..."
+            className="w-full pl-10 pr-4 py-2 text-xs sm:text-sm bg-[#F8FAFC] border border-[#E5E7EB] rounded-xl focus:outline-none focus:border-[#FFD444] focus:ring-2 focus:ring-[#FFD444]/20 text-[#172033] placeholder:text-slate-400 font-medium"
           />
         </div>
 
-        <div className="flex items-center gap-1.5 self-end sm:self-auto">
+        <div className="flex items-center gap-1.5 self-start sm:self-auto overflow-x-auto max-w-full pb-0.5 no-scrollbar">
           <button
             onClick={() => setFilterStatus('ALL')}
-            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 text-xs rounded-xl font-bold transition-all cursor-pointer whitespace-nowrap ${
               filterStatus === 'ALL'
-                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold'
-                : 'text-slate-600 hover:bg-slate-50 border border-transparent'
+                ? 'bg-[#FFF8E1] text-[#92400E] border border-[#FFE08A]'
+                : 'text-[#667085] hover:text-[#172033] hover:bg-slate-100 border border-transparent'
             }`}
           >
             All ({branches.length})
           </button>
           <button
             onClick={() => setFilterStatus('ACTIVE')}
-            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 text-xs rounded-xl font-bold transition-all cursor-pointer whitespace-nowrap ${
               filterStatus === 'ACTIVE'
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold'
-                : 'text-slate-600 hover:bg-slate-50 border border-transparent'
+                ? 'bg-[#EAFBEF] text-[#0E7A36] border border-[#55E07E]/40'
+                : 'text-[#667085] hover:text-[#172033] hover:bg-slate-100 border border-transparent'
             }`}
           >
             Active ({activeCount})
           </button>
           <button
             onClick={() => setFilterStatus('INACTIVE')}
-            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 text-xs rounded-xl font-bold transition-all cursor-pointer whitespace-nowrap ${
               filterStatus === 'INACTIVE'
-                ? 'bg-slate-100 text-slate-700 border border-slate-200 font-semibold'
-                : 'text-slate-600 hover:bg-slate-50 border border-transparent'
+                ? 'bg-slate-100 text-[#172033] border border-slate-300'
+                : 'text-[#667085] hover:text-[#172033] hover:bg-slate-100 border border-transparent'
             }`}
           >
             Inactive ({inactiveCount})
@@ -241,97 +283,78 @@ export const BranchList: React.FC = () => {
         </div>
       </div>
 
-      {/* Branch Cards List */}
+      {/* Branch Cards Grid */}
       {filteredBranches.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center shadow-xs">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mx-auto mb-3">
-            <Store className="w-6 h-6" />
+        <div className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-2xl p-10 sm:p-12 text-center shadow-xs">
+          <div className="w-12 h-12 rounded-2xl bg-[#FFF8E1] border border-[#FFE08A] text-[#D97706] flex items-center justify-center mx-auto mb-3">
+            <Store className="w-6 h-6 stroke-[2.2]" />
           </div>
-          <h3 className="text-base font-semibold text-slate-900">
-            {branches.length === 0 ? 'No branches created yet' : 'No branches match your filter'}
+          <h3 className="text-base font-black text-[#172033]">
+            {branches.length === 0 ? 'No locations created yet' : 'No locations match your filter'}
           </h3>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-sm mx-auto">
+          <p className="text-xs sm:text-sm text-[#667085] mt-1 max-w-sm mx-auto">
             {branches.length === 0
-              ? 'Add your first branch location to start generating QR codes and managing loyalty operations.'
-              : 'Try changing your search terms or status filter.'}
+              ? 'Add your first location to generate its customer QR standee and start accepting check-ins.'
+              : 'Try changing your search terms or filter selection.'}
           </p>
           {branches.length === 0 && (
             <button
               onClick={() => setIsCreateModalOpen(true)}
-              className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-2xs cursor-pointer"
+              className="mt-4 inline-flex items-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-black rounded-xl bg-[#FFD444] hover:bg-[#F4EB6C] text-[#172033] transition-all shadow-xs cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
-              <span>Create First Branch</span>
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Add First Location</span>
             </button>
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
           {filteredBranches.map((branch) => (
             <div
               key={branch.id}
-              className={`bg-white border rounded-2xl p-5 shadow-xs transition-all hover:border-slate-300 flex flex-col justify-between ${
-                branch.isActive ? 'border-slate-200' : 'border-slate-200/60 bg-slate-50/50 opacity-90'
+              className={`bg-[#FFFFFF] border rounded-2xl p-5 sm:p-6 shadow-xs transition-all flex flex-col justify-between ${
+                branch.isActive ? 'border-[#E5E7EB] hover:border-[#FFD444]' : 'border-[#E5E7EB]/80 bg-[#F8FAFC] opacity-90'
               }`}
             >
               <div>
                 <div className="flex items-start justify-between gap-3 mb-2.5">
-                  <div>
-                    <h3 className="text-base font-semibold text-slate-900 leading-snug">
+                  <div className="min-w-0">
+                    <h3 className="text-base sm:text-lg font-black text-[#172033] leading-snug break-words">
                       {branch.name}
                     </h3>
-                    <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-1">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span>{branch.address || 'No physical address provided'}</span>
+                    <p className="text-xs text-[#667085] flex items-start gap-1.5 mt-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-[#667085] shrink-0 mt-0.5" />
+                      <span className="break-words">{branch.address || 'No physical address provided'}</span>
                     </p>
                   </div>
 
                   {branch.isActive ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100 shrink-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#EAFBEF] text-[#0E7A36] border border-[#55E07E]/30 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#55E07E]" />
                       Active
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-[#667085] border border-slate-200 shrink-0">
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                       Inactive
                     </span>
                   )}
                 </div>
 
-                {/* QR Token Strip */}
-                <div className="mt-3.5 bg-slate-50 border border-slate-100 rounded-xl p-2.5 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-6 h-6 rounded-md bg-white border border-slate-200 flex items-center justify-center text-slate-600 shrink-0">
-                      <QrCode className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block leading-none">
-                        QR Token
-                      </span>
-                      <span className="text-xs font-mono text-slate-700 truncate block mt-0.5">
-                        {branch.qrToken}
-                      </span>
-                    </div>
+                {/* QR Code Status Indicator */}
+                <div className="mt-4 bg-[#F8FAFC] border border-[#E5E7EB] rounded-xl px-3 py-2 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <QrCode className="w-4 h-4 text-[#D97706]" />
+                    <span className="font-bold text-[#172033]">Standee QR Ready</span>
                   </div>
-
-                  <button
-                    onClick={(e) => handleCopyQrToken(branch.qrToken, e)}
-                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-white rounded-md transition-colors cursor-pointer shrink-0 border border-transparent hover:border-slate-200"
-                    title="Copy QR Token"
-                  >
-                    {copiedToken === branch.qrToken ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5" />
-                    )}
-                  </button>
+                  <span className="text-[11px] text-[#667085] font-medium">Customer check-in enabled</span>
                 </div>
               </div>
 
               {/* Action Footer */}
-              <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between gap-2">
+              <div className="mt-5 pt-4 border-t border-[#E5E7EB] flex items-center justify-between gap-3">
                 <button
+                  type="button"
                   onClick={() =>
                     toggleStatusMutation.mutate({
                       id: branch.id,
@@ -339,10 +362,10 @@ export const BranchList: React.FC = () => {
                     })
                   }
                   disabled={toggleStatusMutation.isPending}
-                  className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors cursor-pointer ${
+                  className={`text-xs font-bold px-3 py-2 rounded-xl border transition-colors cursor-pointer min-h-[40px] flex items-center ${
                     branch.isActive
-                      ? 'border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100'
-                      : 'border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                      ? 'border-amber-200 text-amber-800 bg-amber-50 hover:bg-amber-100'
+                      : 'border-[#55E07E]/40 text-[#0E7A36] bg-[#EAFBEF] hover:bg-[#55E07E]/20'
                   }`}
                 >
                   {branch.isActive ? 'Deactivate' : 'Activate'}
@@ -350,10 +373,10 @@ export const BranchList: React.FC = () => {
 
                 <Link
                   to={`/owner/branches/${branch.id}`}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                  className="inline-flex items-center gap-1.5 text-xs font-black px-3.5 py-2 rounded-xl bg-[#FFF8E1] hover:bg-[#FFD444] text-[#92400E] hover:text-[#172033] border border-[#FFE08A] transition-all min-h-[40px]"
                 >
-                  <span>Branch Details & QR</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
+                  <span>Manage Location & QR</span>
+                  <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
                 </Link>
               </div>
             </div>
@@ -361,77 +384,77 @@ export const BranchList: React.FC = () => {
         </div>
       )}
 
-      {/* Create Branch Modal */}
+      {/* Add New Branch Modal */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-xl space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-t-3xl sm:rounded-2xl max-w-md w-full p-6 shadow-xl space-y-5 animate-in slide-in-from-bottom sm:slide-in-from-none duration-200">
+            <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3.5">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
-                  <GitBranch className="w-4 h-4" />
+                <div className="w-9 h-9 rounded-xl bg-[#FFF8E1] border border-[#FFE08A] text-[#D97706] flex items-center justify-center">
+                  <Store className="w-4 h-4 stroke-[2.2]" />
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-slate-900">Add New Branch</h3>
-                  <p className="text-xs text-slate-500">Create a location and generate its QR token</p>
+                  <h3 className="text-base font-black text-[#172033]">Add New Location</h3>
+                  <p className="text-xs text-[#667085]">Create a location and generate its customer QR standee.</p>
                 </div>
               </div>
 
               <button
                 onClick={() => setIsCreateModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-md transition-colors cursor-pointer"
+                className="text-[#667085] hover:text-[#172033] p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {createError && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg p-3 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+              <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl p-3.5 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
                 <span>{createError}</span>
               </div>
             )}
 
             <form onSubmit={handleCreateSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Branch Name <span className="text-red-500">*</span>
+                <label className="text-xs font-bold text-[#172033] uppercase tracking-wider block">
+                  Location Name <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={newBranchName}
                   onChange={(e) => setNewBranchName(e.target.value)}
-                  placeholder="e.g. Downtown Flagship, Westside Mall"
-                  className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-slate-800 placeholder:text-slate-400"
+                  placeholder="e.g. Katraj Branch, Downtown Store"
+                  className="w-full px-4 py-2.5 text-sm bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl focus:outline-none focus:border-[#FFD444] focus:ring-2 focus:ring-[#FFD444]/20 text-[#172033] placeholder:text-slate-400 font-medium"
                   required
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                <label className="text-xs font-bold text-[#172033] uppercase tracking-wider block">
                   Physical Address
                 </label>
                 <textarea
                   value={newBranchAddress}
                   onChange={(e) => setNewBranchAddress(e.target.value)}
-                  placeholder="e.g. 100 Main Street, Floor 1, City Center"
+                  placeholder="e.g. Maratha Society, Mohan Nagar, Dhankawadi"
                   rows={2}
-                  className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-slate-800 placeholder:text-slate-400 resize-none"
+                  className="w-full px-4 py-2.5 text-sm bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl focus:outline-none focus:border-[#FFD444] focus:ring-2 focus:ring-[#FFD444]/20 text-[#172033] placeholder:text-slate-400 resize-none font-medium"
                 />
               </div>
 
-              <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3 flex items-start gap-2.5">
-                <QrCode className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                <p className="text-[11px] text-indigo-900 leading-relaxed">
-                  A unique, secure <span className="font-semibold">QR token</span> will automatically be generated for this branch upon creation.
+              <div className="bg-[#FFF8E1] border border-[#FFE08A] rounded-xl p-3 flex items-center gap-2.5">
+                <QrCode className="w-4 h-4 text-[#D97706] shrink-0" />
+                <p className="text-[11px] text-[#92400E] font-medium leading-relaxed">
+                  A unique customer check-in QR and printable standee will be generated automatically.
                 </p>
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-2">
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#E5E7EB]">
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
                   disabled={createMutation.isPending}
-                  className="px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+                  className="px-4 py-2.5 text-xs font-bold text-[#667085] hover:text-[#172033] bg-[#FFFFFF] hover:bg-slate-50 border border-[#E5E7EB] rounded-xl transition-colors cursor-pointer min-h-[40px]"
                 >
                   Cancel
                 </button>
@@ -439,17 +462,17 @@ export const BranchList: React.FC = () => {
                 <button
                   type="submit"
                   disabled={createMutation.isPending}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-2xs disabled:opacity-50 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 text-xs font-black text-[#172033] bg-[#FFD444] hover:bg-[#F4EB6C] rounded-xl transition-all shadow-xs disabled:opacity-50 cursor-pointer active:scale-[0.98] min-h-[40px]"
                 >
                   {createMutation.isPending ? (
                     <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#172033]" />
                       <span>Creating...</span>
                     </>
                   ) : (
                     <>
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Create Branch</span>
+                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                      <span>Create Location</span>
                     </>
                   )}
                 </button>

@@ -1,5 +1,7 @@
 export type RewardType = 'NONE' | 'PERCENT_DISCOUNT' | 'FIXED_DISCOUNT' | 'FREE_ITEM';
 
+export type RewardChangeMode = 'NEW_CYCLES_ONLY' | 'EXISTING_AND_NEW' | 'STOP_REWARD';
+
 export interface Milestone {
   id: string;
   programId: string;
@@ -12,6 +14,9 @@ export interface Milestone {
   isEnabled: boolean;
   createdAt: string;
   updatedAt: string;
+  _count?: {
+    milestoneRewards: number;
+  };
 }
 
 export interface LoyaltyProgram {
@@ -53,4 +58,5 @@ export interface UpdateMilestoneRequest {
   rewardName?: string | null;
   rewardDescription?: string | null;
   rewardValue?: number | null;
+  changeMode?: RewardChangeMode;
 }

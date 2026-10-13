@@ -5,6 +5,10 @@ import {
   generateRewardClaimToken,
   hashRewardClaimToken,
 } from '../utils/redemptionToken';
+import {
+  getEffectiveCycleMilestones,
+  getEffectiveCycleLength,
+} from '../utils/cycleSnapshot';
 
 export class CustomerLoyaltyService {
   /**
@@ -177,7 +181,19 @@ export class CustomerLoyaltyService {
     const unlockedRewards = earnedRewards.filter((r) => r.status === 'UNLOCKED');
     const redeemedRewards = earnedRewards.filter((r) => r.status === 'REDEEMED');
 
-    const milestonesWithStatus = activeProgram.milestones.map((m) => {
+    const effectiveMilestones = effectiveCycle
+      ? getEffectiveCycleMilestones(effectiveCycle, activeProgram.milestones)
+      : activeProgram.milestones.map((m) => ({
+          id: m.id,
+          visitNumber: m.visitNumber,
+          rewardType: m.rewardType,
+          rewardName: m.rewardName,
+          rewardDescription: m.rewardDescription,
+          rewardValue: m.rewardValue ? m.rewardValue.toString() : null,
+          isEnabled: m.isEnabled,
+        }));
+
+    const milestonesWithStatus = effectiveMilestones.map((m) => {
       const rewardRecord = cycleRewardsMap.get(m.id);
       let status: 'LOCKED' | 'UNLOCKED' | 'REDEEMED' = 'LOCKED';
 
@@ -191,12 +207,18 @@ export class CustomerLoyaltyService {
         id: m.id,
         visitNumber: m.visitNumber,
         rewardType: m.rewardType,
-        rewardName: m.rewardName,
-        rewardDescription: m.rewardDescription,
-        rewardValue: m.rewardValue ? m.rewardValue.toString() : null,
+        rewardName: rewardRecord?.snapshotRewardName ?? m.rewardName,
+        rewardDescription: rewardRecord?.snapshotRewardDescription ?? m.rewardDescription,
+        rewardValue: rewardRecord
+          ? (rewardRecord.snapshotRewardValue ? rewardRecord.snapshotRewardValue.toString() : null)
+          : (m.rewardValue != null ? m.rewardValue.toString() : null),
         status,
       };
     });
+
+    const effectiveCycleLength = effectiveCycle
+      ? getEffectiveCycleLength(effectiveCycle, activeProgram.cycleLength)
+      : activeProgram.cycleLength;
 
     // Compute cycle status for display (handles lazy rollover 0/N display)
     const cycleDisplay = activeCycle
@@ -205,7 +227,7 @@ export class CustomerLoyaltyService {
           id: activeCycle.id,
           cycleNumber: activeCycle.cycleNumber,
           visitCount: activeCycle.visitCount,
-          cycleLength: activeProgram.cycleLength,
+          cycleLength: effectiveCycleLength,
           status: activeCycle.status,
           startedAt: activeCycle.startedAt,
           completedAt: null,
@@ -217,7 +239,7 @@ export class CustomerLoyaltyService {
           id: latestCompletedCycle.id,
           cycleNumber: latestCompletedCycle.cycleNumber,
           visitCount: latestCompletedCycle.visitCount,
-          cycleLength: activeProgram.cycleLength,
+          cycleLength: effectiveCycleLength,
           status: 'COMPLETED',
           startedAt: latestCompletedCycle.startedAt,
           completedAt: latestCompletedCycle.completedAt,
@@ -404,8 +426,9 @@ export class CustomerLoyaltyService {
     const currentVisitCount = activeCycle ? activeCycle.visitCount : 0;
     const expectedVisitNumber = currentVisitCount + 1;
 
-    // Check if expectedVisitNumber matches a configured reward milestone
-    const milestone = activeProgram.milestones.find((m) => m.visitNumber === expectedVisitNumber);
+    // Check if expectedVisitNumber matches a configured reward milestone in effective cycle
+    const effectiveMilestones = getEffectiveCycleMilestones(activeCycle, activeProgram.milestones);
+    const milestone = effectiveMilestones.find((m) => m.visitNumber === expectedVisitNumber);
     if (!milestone || milestone.rewardType === 'NONE') {
       throw new AppError('The next qualifying visit does not have an attached reward milestone', 400);
     }

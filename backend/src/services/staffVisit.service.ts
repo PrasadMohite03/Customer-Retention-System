@@ -9,6 +9,11 @@ import {
   isValidRewardClaimTokenFormat,
   hashRewardClaimToken,
 } from '../utils/redemptionToken';
+import {
+  serializeMilestonesForSnapshot,
+  getEffectiveCycleMilestones,
+  getEffectiveCycleLength,
+} from '../utils/cycleSnapshot';
 
 export interface AuthenticatedUserContext {
   userId: string;
@@ -260,6 +265,8 @@ export class StaffVisitService {
               cycleNumber: nextCycleNumber,
               visitCount: 0,
               status: 'ACTIVE',
+              snapshotCycleLength: activeProgram.cycleLength,
+              snapshotMilestones: serializeMilestonesForSnapshot(activeProgram.milestones) as any,
               startedAt: new Date(),
             },
           });
@@ -303,7 +310,8 @@ export class StaffVisitService {
       });
 
       // 7. Evaluate Milestone & create Snapshot MilestoneReward
-      const matchingMilestone = activeProgram.milestones.find(
+      const effectiveMilestones = getEffectiveCycleMilestones(activeCycle, activeProgram.milestones);
+      const matchingMilestone = effectiveMilestones.find(
         (m) => m.visitNumber === newVisitCount
       );
 
@@ -324,7 +332,10 @@ export class StaffVisitService {
                 loyaltyCycleId: activeCycle.id,
                 milestoneId: matchingMilestone.id,
                 snapshotRewardType: matchingMilestone.rewardType,
-                snapshotRewardValue: matchingMilestone.rewardValue,
+                snapshotRewardValue:
+                  matchingMilestone.rewardValue != null
+                    ? new Prisma.Decimal(matchingMilestone.rewardValue)
+                    : null,
                 snapshotRewardName: matchingMilestone.rewardName,
                 snapshotRewardDescription: matchingMilestone.rewardDescription,
                 status: 'UNLOCKED',
@@ -352,7 +363,8 @@ export class StaffVisitService {
       }
 
       // 8. Cycle Completion check (Lazy rollover: do NOT create next cycle immediately)
-      const isCycleCompleted = newVisitCount >= activeProgram.cycleLength;
+      const effectiveCycleLength = getEffectiveCycleLength(activeCycle, activeProgram.cycleLength);
+      const isCycleCompleted = newVisitCount >= effectiveCycleLength;
 
       if (isCycleCompleted) {
         await tx.loyaltyCycle.update({
@@ -1135,6 +1147,8 @@ export class StaffVisitService {
               cycleNumber: nextCycleNumber,
               visitCount: 0,
               status: 'ACTIVE',
+              snapshotCycleLength: activeProgram.cycleLength,
+              snapshotMilestones: serializeMilestonesForSnapshot(activeProgram.milestones) as any,
               startedAt: now,
             },
           });
@@ -1166,7 +1180,8 @@ export class StaffVisitService {
         );
       }
 
-      const matchingMilestone = activeProgram.milestones.find(
+      const effectiveMilestones = getEffectiveCycleMilestones(activeCycle, activeProgram.milestones);
+      const matchingMilestone = effectiveMilestones.find(
         (m) => m.id === claimPre.milestoneId && m.visitNumber === newVisitCount
       );
 
@@ -1202,7 +1217,8 @@ export class StaffVisitService {
       });
 
       // 2 & 3. Increment LoyaltyCycle.visitCount. If this completes the cycle: mark COMPLETED.
-      const isCycleCompleted = newVisitCount >= activeProgram.cycleLength;
+      const effectiveCycleLength = getEffectiveCycleLength(activeCycle, activeProgram.cycleLength);
+      const isCycleCompleted = newVisitCount >= effectiveCycleLength;
       await tx.loyaltyCycle.update({
         where: { id: activeCycle.id },
         data: {
@@ -1219,7 +1235,10 @@ export class StaffVisitService {
           loyaltyCycleId: activeCycle.id,
           milestoneId: matchingMilestone.id,
           snapshotRewardType: matchingMilestone.rewardType,
-          snapshotRewardValue: matchingMilestone.rewardValue,
+          snapshotRewardValue:
+            matchingMilestone.rewardValue != null
+              ? new Prisma.Decimal(matchingMilestone.rewardValue)
+              : null,
           snapshotRewardName: matchingMilestone.rewardName,
           snapshotRewardDescription: matchingMilestone.rewardDescription,
           status: 'REDEEMED',
