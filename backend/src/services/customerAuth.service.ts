@@ -157,6 +157,7 @@ export class CustomerAuthService {
         id: customer.id,
         phone: customer.phone,
         name: customer.name,
+        email: customer.email,
       },
       accessToken,
       refreshTokenValue,

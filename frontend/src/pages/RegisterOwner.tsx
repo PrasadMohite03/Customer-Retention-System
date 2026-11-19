@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Building2, Mail, Lock, Store, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
-import { AaoLogo } from '../components/ui/AaoBrand';
+import { Mail, Lock, Store, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
+import { AaoLogo, AaoMascot } from '../components/ui/AaoBrand';
 
 export const RegisterOwner: React.FC = () => {
   const { registerOwner } = useAuth();
@@ -46,33 +46,49 @@ export const RegisterOwner: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#172033] flex flex-col justify-between relative selection:bg-[#FFD444]/30 selection:text-[#172033] font-sans">
+    <div className="min-h-screen bg-[#FAF9F5] text-[#172033] flex flex-col justify-between relative selection:bg-[#FFD444]/30 selection:text-[#172033] font-sans overflow-x-hidden">
+      {/* Ambient Warm Golden Glow Backdrop */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[360px] bg-gradient-to-b from-[#FFF0A8]/70 via-[#FFF8D6]/40 to-transparent rounded-full blur-3xl" />
+        <div className="absolute top-16 -left-20 w-80 h-80 bg-[#FFE57F]/30 rounded-full blur-3xl" />
+        <div className="absolute top-24 -right-20 w-80 h-80 bg-[#FFD444]/25 rounded-full blur-3xl" />
+      </div>
+
       {/* Top Bar */}
-      <header className="border-b border-[#E5E7EB] bg-[#FFFFFF]/90 backdrop-blur-md px-6 sm:px-10 py-3.5 flex items-center justify-between relative z-10">
+      <header className="border-b border-[#E5E7EB]/80 bg-[#FFFFFF]/85 backdrop-blur-md px-6 sm:px-10 py-3.5 flex items-center justify-between relative z-10">
         <Link to="/" className="flex items-center gap-2.5">
           <AaoLogo variant="full" size="sm" />
         </Link>
         <Link 
           to="/login"
-          className="text-xs sm:text-sm font-bold text-[#667085] hover:text-[#172033] transition-colors"
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold text-[#172033] bg-[#FFFFFF] border border-[#E5E7EB] hover:border-[#FFD444] shadow-xs hover:bg-[#FFFDF5] transition-all"
         >
-          Already have an account? Sign In &rarr;
+          <span>Already registered? Sign In</span>
+          <ArrowRight className="w-3.5 h-3.5 text-[#667085]" />
         </Link>
       </header>
 
       {/* Main Container */}
       <main className="flex-1 flex items-center justify-center p-4 sm:p-6 relative z-10">
-        <div className="w-full max-w-md bg-[#FFFFFF] border border-[#E5E7EB] rounded-3xl shadow-sm p-7 sm:p-8">
+        <div className="w-full max-w-md bg-[#FFFFFF] border border-[#E5E7EB] rounded-3xl shadow-xl shadow-amber-500/5 p-7 sm:p-9">
           <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 text-[#172033] mb-3">
-              <Building2 className="w-5 h-5" />
+            {/* Mascot Banner Moment */}
+            <div className="mb-3 flex justify-center">
+              <AaoMascot mood="celebrate" size={72} />
             </div>
-            <h1 className="text-2xl font-black text-[#172033] tracking-tight">Register Store</h1>
-            <p className="text-xs text-[#667085] mt-1">Launch your AAO digital loyalty program</p>
+
+            {/* Pill Badge */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FFD444]/20 border border-[#FFD444]/40 text-[#172033] text-[11px] font-black uppercase tracking-wider mb-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#FFD444]" />
+              <span>Store Onboarding</span>
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl font-black text-[#172033] tracking-tight">Register Store</h1>
+            <p className="text-xs text-[#667085] mt-1.5">Launch your AAO digital loyalty program in seconds</p>
           </div>
 
           {error && (
-            <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2.5">
+            <div className="mb-5 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2.5">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-500" />
               <span>{error}</span>
             </div>
@@ -80,24 +96,24 @@ export const RegisterOwner: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#475467] mb-1.5">
                 Business Name *
               </label>
               <div className="relative">
-                <Store className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Store className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" />
                 <input
                   type="text"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
                   placeholder="Apex Coffee Roasters"
                   required
-                  className="w-full bg-[#F8FAFC] border border-[#E5E7EB] focus:bg-white focus:border-[#FFD444] focus:ring-2 focus:ring-[#FFD444]/20 rounded-xl px-4 py-2.5 pl-10 text-[#172033] placeholder:text-[#667085] text-xs focus:outline-none transition-all"
+                  className="w-full bg-[#F8FAFC] border border-[#E2E8F0] focus:bg-white focus:border-[#FFD444] focus:ring-4 focus:ring-[#FFD444]/20 rounded-xl px-4 py-2.5 pl-10 text-[#172033] placeholder:text-[#94A3B8] text-sm focus:outline-none transition-all"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#475467] mb-1.5">
                 Business Type (Optional)
               </label>
               <input
@@ -105,40 +121,40 @@ export const RegisterOwner: React.FC = () => {
                 value={businessType}
                 onChange={(e) => setBusinessType(e.target.value)}
                 placeholder="Café, Salon, Gym, Retail..."
-                className="w-full bg-[#F8FAFC] border border-[#E5E7EB] focus:bg-white focus:border-[#FFD444] focus:ring-2 focus:ring-[#FFD444]/20 rounded-xl px-4 py-2.5 text-[#172033] placeholder:text-[#667085] text-xs focus:outline-none transition-all"
+                className="w-full bg-[#F8FAFC] border border-[#E2E8F0] focus:bg-white focus:border-[#FFD444] focus:ring-4 focus:ring-[#FFD444]/20 rounded-xl px-4 py-2.5 text-[#172033] placeholder:text-[#94A3B8] text-sm focus:outline-none transition-all"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#475467] mb-1.5">
                 Owner Email Address *
               </label>
               <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="owner@business.com"
                   required
-                  className="w-full bg-[#F8FAFC] border border-[#E5E7EB] focus:bg-white focus:border-[#FFD444] focus:ring-2 focus:ring-[#FFD444]/20 rounded-xl px-4 py-2.5 pl-10 text-[#172033] placeholder:text-[#667085] text-xs focus:outline-none transition-all"
+                  className="w-full bg-[#F8FAFC] border border-[#E2E8F0] focus:bg-white focus:border-[#FFD444] focus:ring-4 focus:ring-[#FFD444]/20 rounded-xl px-4 py-2.5 pl-10 text-[#172033] placeholder:text-[#94A3B8] text-sm focus:outline-none transition-all"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#475467] mb-1.5">
                 Password *
               </label>
               <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" />
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="At least 8 characters"
                   required
-                  className="w-full bg-[#F8FAFC] border border-[#E5E7EB] focus:bg-white focus:border-[#FFD444] focus:ring-2 focus:ring-[#FFD444]/20 rounded-xl px-4 py-2.5 pl-10 text-[#172033] placeholder:text-[#667085] text-xs focus:outline-none transition-all"
+                  className="w-full bg-[#F8FAFC] border border-[#E2E8F0] focus:bg-white focus:border-[#FFD444] focus:ring-4 focus:ring-[#FFD444]/20 rounded-xl px-4 py-2.5 pl-10 text-[#172033] placeholder:text-[#94A3B8] text-sm focus:outline-none transition-all"
                 />
               </div>
             </div>
@@ -146,17 +162,17 @@ export const RegisterOwner: React.FC = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-[#172033] hover:bg-slate-800 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2 text-xs cursor-pointer active:scale-[0.98]"
+              className="w-full bg-[#FFD444] hover:bg-[#FACC15] text-[#172033] font-black py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-xs border border-[#EAB308]/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-3 text-sm cursor-pointer active:scale-[0.98]"
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin text-[#172033]" />
                   <span>Creating Account...</span>
                 </>
               ) : (
                 <>
-                  <span>Create Account</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <span>Create Store Account</span>
+                  <ArrowRight className="w-4 h-4 stroke-[2.5]" />
                 </>
               )}
             </button>
@@ -165,7 +181,7 @@ export const RegisterOwner: React.FC = () => {
           <div className="mt-7 pt-5 border-t border-[#E5E7EB] text-center">
             <p className="text-xs text-[#667085]">
               Already registered?{' '}
-              <Link to="/login" className="text-[#172033] hover:underline font-bold transition-colors">
+              <Link to="/login" className="text-[#172033] hover:text-[#D97706] hover:underline font-extrabold transition-colors">
                 Sign in to your account
               </Link>
             </p>
@@ -174,8 +190,8 @@ export const RegisterOwner: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-[#E5E7EB] bg-[#FFFFFF] py-4 text-center text-xs text-[#667085]">
-        AAO • Store Owner Registration
+      <footer className="border-t border-[#E5E7EB]/80 bg-[#FFFFFF]/80 py-4 text-center text-xs text-[#667085]">
+        AAO • Scan. Earn. Come Again.
       </footer>
     </div>
   );

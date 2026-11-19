@@ -6,12 +6,18 @@ import {
   createRewardClaimHandler,
   getCustomerHistoryHandler,
   getCustomerExploreHandler,
+  getCustomerProfileHandler,
+  updateCustomerProfileHandler,
 } from '../controllers/customerLoyalty.controller';
 
 const router = Router();
 
 // Strictly authenticate customer via phone/OTP JWT
 router.use(authenticateCustomer);
+
+// Customer profile endpoints
+router.get('/profile', getCustomerProfileHandler);
+router.patch('/profile', updateCustomerProfileHandler);
 
 // Read-only explore / participating businesses directory
 router.get('/explore', getCustomerExploreHandler);

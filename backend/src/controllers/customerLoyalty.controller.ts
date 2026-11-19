@@ -132,4 +132,50 @@ export async function getCustomerExploreHandler(
   }
 }
 
+export async function getCustomerProfileHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const customerId = req.customer?.customerId;
+    if (!customerId) {
+      throw new AppError('Unauthorized: Customer context missing', 401);
+    }
+
+    const result = await CustomerLoyaltyService.getCustomerProfile(customerId);
+
+    return res.status(200).json({
+      status: 'success',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateCustomerProfileHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const customerId = req.customer?.customerId;
+    if (!customerId) {
+      throw new AppError('Unauthorized: Customer context missing', 401);
+    }
+
+    const { name, email } = req.body;
+    const result = await CustomerLoyaltyService.updateCustomerProfile(customerId, { name, email });
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Profile updated successfully',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 

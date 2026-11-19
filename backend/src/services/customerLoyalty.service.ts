@@ -906,6 +906,89 @@ export class CustomerLoyaltyService {
       },
     };
   }
+
+  /**
+   * Retrieves customer profile details.
+   */
+  static async getCustomerProfile(customerId: string) {
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerId },
+      select: {
+        id: true,
+        phone: true,
+        name: true,
+        email: true,
+      },
+    });
+
+    if (!customer) {
+      throw new AppError('Customer not found', 404);
+    }
+
+    return {
+      id: customer.id,
+      phone: customer.phone,
+      name: customer.name,
+      email: customer.email,
+    };
+  }
+
+  /**
+   * Updates customer profile details (name and email).
+   * Empty or whitespace-only email values are stored as NULL.
+   */
+  static async updateCustomerProfile(
+    customerId: string,
+    data: { name: string; email?: string | null }
+  ) {
+    const { name, email } = data;
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      throw new AppError('Full name is required', 400);
+    }
+
+    const trimmedName = name.trim();
+
+    let validatedEmail: string | null = null;
+    if (email !== undefined && email !== null) {
+      const trimmedEmail = typeof email === 'string' ? email.trim() : '';
+      if (trimmedEmail !== '') {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(trimmedEmail)) {
+          throw new AppError('Invalid email format', 400);
+        }
+        validatedEmail = trimmedEmail;
+      }
+    }
+
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerId },
+    });
+
+    if (!customer) {
+      throw new AppError('Customer not found', 404);
+    }
+
+    const updated = await prisma.customer.update({
+      where: { id: customerId },
+      data: {
+        name: trimmedName,
+        email: validatedEmail,
+      },
+      select: {
+        id: true,
+        phone: true,
+        name: true,
+        email: true,
+      },
+    });
+
+    return {
+      id: updated.id,
+      phone: updated.phone,
+      name: updated.name,
+      email: updated.email,
+    };
+  }
 }
 
 

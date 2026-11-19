@@ -61,9 +61,21 @@ export const OwnerLayout: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#172033] flex flex-col font-sans">
+    <div className="min-h-screen bg-[#FAF9F5] text-[#172033] flex flex-col font-sans relative overflow-x-hidden">
+      {/* ── Ambient Modern Yellow Gradient Backdrop ──────────────────────── */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        {/* Top-centered luminous warm gradient */}
+        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[1100px] h-[520px] bg-gradient-to-b from-[#FFF2B2]/60 via-[#FFF9DC]/40 to-transparent rounded-full blur-3xl opacity-80" />
+        {/* Left ambient sunburst orb */}
+        <div className="absolute top-24 -left-36 w-[450px] h-[450px] bg-[#FFE57F]/25 rounded-full blur-3xl" />
+        {/* Right ambient golden orb */}
+        <div className="absolute top-36 -right-36 w-[500px] h-[500px] bg-[#FFD444]/20 rounded-full blur-3xl" />
+        {/* Subtle vertical linear gradient wash */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#FFF8D6]/35 via-[#FFFDF5]/20 to-transparent" />
+      </div>
+
       {/* Top Application Header */}
-      <header className="sticky top-0 z-40 border-b border-[#E5E7EB] bg-[#FFFFFF] px-4 sm:px-8 py-3 flex items-center justify-between shadow-2xs">
+      <header className="sticky top-0 z-40 border-b border-[#E5E7EB]/80 bg-[#FFFFFF]/90 backdrop-blur-md px-4 sm:px-8 py-3 flex items-center justify-between shadow-2xs">
         {/* Left: Brand + Title */}
         <div className="flex items-center gap-3">
           <Link to="/owner/dashboard" className="flex items-center gap-2.5">
@@ -73,7 +85,7 @@ export const OwnerLayout: React.FC = () => {
                 <span className="font-black text-base text-[#172033] leading-none tracking-tight">AAO</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-[#FFD444]" />
               </div>
-              <span className="block text-[10px] text-[#667085] font-bold uppercase tracking-wider mt-0.5">
+              <span className="block text-[10px] text-[#667085] font-extrabold uppercase tracking-widest mt-0.5">
                 Business Owner Portal
               </span>
             </div>
@@ -82,7 +94,7 @@ export const OwnerLayout: React.FC = () => {
 
         {/* Desktop Right Actions */}
         <div className="hidden md:flex items-center gap-3">
-          <span className="text-xs font-mono text-[#667085] bg-[#F8FAFC] px-2.5 py-1 rounded-lg border border-[#E5E7EB] truncate max-w-[220px]">
+          <span className="text-xs font-mono font-medium text-[#667085] bg-[#F8FAFC] px-2.5 py-1 rounded-lg border border-[#E5E7EB] truncate max-w-[220px]">
             {user?.email}
           </span>
 
@@ -94,7 +106,7 @@ export const OwnerLayout: React.FC = () => {
           <button
             type="button"
             onClick={logout}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#FFFFFF] hover:bg-slate-50 text-[#172033] text-xs font-bold transition-colors border border-[#E5E7EB] shadow-2xs cursor-pointer active:scale-95"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#FFFFFF] hover:bg-slate-50 text-[#172033] text-xs font-extrabold transition-colors border border-[#E5E7EB] shadow-2xs cursor-pointer active:scale-95"
           >
             <LogOut className="w-3.5 h-3.5 text-[#667085]" />
             <span>Logout</span>
@@ -118,7 +130,7 @@ export const OwnerLayout: React.FC = () => {
       </header>
 
       {/* Desktop & Tablet Navigation Bar */}
-      <nav className="hidden md:block bg-[#FFFFFF] border-b border-[#E5E7EB] px-4 sm:px-8">
+      <nav className="hidden md:block bg-[#FFFFFF]/85 backdrop-blur-md border-b border-[#E5E7EB]/80 px-4 sm:px-8 relative z-20">
         <div className="max-w-6xl mx-auto flex items-center gap-1 lg:gap-2 overflow-x-auto py-1 scrollbar-none">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -128,7 +140,7 @@ export const OwnerLayout: React.FC = () => {
                 to={item.to}
                 end={item.end}
                 className={({ isActive }) =>
-                  `flex items-center gap-2 px-3.5 py-2.5 text-xs lg:text-sm font-bold border-b-2 transition-all whitespace-nowrap rounded-t-lg ${
+                  `flex items-center gap-2 px-3.5 py-2.5 text-xs lg:text-sm font-extrabold border-b-2 transition-all whitespace-nowrap rounded-t-xl tracking-tight ${
                     isActive
                       ? 'border-[#FFD444] text-[#172033] bg-[#FFFDF5]'
                       : 'border-transparent text-[#667085] hover:text-[#172033] hover:bg-slate-50'
@@ -208,7 +220,7 @@ export const OwnerLayout: React.FC = () => {
       )}
 
       {/* Main Page Content */}
-      <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+      <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 relative z-10">
         <Outlet />
       </main>
     </div>
